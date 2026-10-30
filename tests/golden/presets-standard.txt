@@ -1,0 +1,24 @@
+ FNIRSI  DPS-150 · fw V1.2                   ● connected  usbmodem13C85FCE40251 
+ 4.998 V  0.512 A  2.56 W  CV · ON                                      PRESETS 
+╭─ Presets ───────────────────── device M1–M6 ─╮╭─ M3 · 9V pedal ─────── edit ─╮
+│    #   name              V       I    P max  ││ VOLTAGE                      │
+│    M1  3V3 logic    3.30 V  1.00 A    3.3 W  ││  ┏━━━┓ ┏━━━┓   ┏━━━┓ ┏━━━┓   │
+│    M2  USB 5V       5.00 V  1.00 A    5.0 W  ││  ┃   ┃ ┃   ┃   ┃   ┃ ┃   ┃   │
+│  ▸ M3  9V pedal     9.00 V  2.00 A   18.0 W  ││  ┃   ┃ ┗━━━┫   ┃   ┃ ┃   ┃   │
+│    M4  12V fan     12.00 V  2.00 A   24.0 W  ││  ┃   ┃     ┃   ┃   ┃ ┃   ┃   │
+│    M5  LED test     5.00 V  0.50 A    2.5 W  ││  ┗━━━┛ ╺━━━┛ . ┗━━━┛ ┗━━━┛   │
+│    M6  24V rail    24.00 V  2.00 A   48.0 W  ││        ▔▔▔▔▔                 │
+│                                              ││ CURRENT                      │
+│ Now 5.00 V / 1.500 A  (no preset matches)    ││  ╺━━━┓   ┏━━━┓ ┏━━━┓ ┏━━━┓   │
+│ Recall sets V and I; output unchanged.       ││      ┃   ┃   ┃ ┃   ┃ ┃   ┃   │
+│                                              ││  ┏━━━┛   ┃   ┃ ┃   ┃ ┃   ┃   │
+│                                              ││  ┃       ┃   ┃ ┃   ┃ ┃   ┃   │
+│                                              ││  ┗━━━╸ . ┗━━━┛ ┗━━━┛ ┗━━━┛   │
+│                                              ││                              │
+│                                              ││ ✓ within 20.05 V / 5.10 A    │
+│                                              ││                              │
+╰──────────────────────────────────────────────╯╰──────────────────────────────╯
+╭─ M6 · 24V rail ──────────────────────────────────────────────────────────────╮
+│ ! 24.00 V exceeds the live maximum 20.05 V. Recall is blocked.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ ⏎  recall   e  edit   n  rename   s  save   x  clear   Esc  back   ?  help  

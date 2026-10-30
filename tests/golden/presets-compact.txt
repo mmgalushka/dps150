@@ -1,0 +1,16 @@
+ FNIRSI  DPS-150                ● connected
+ 4.998 V  0.512 A  2.56 W  ON       PRESETS
+╭─ Presets ────────────────────────────────╮
+│    M1 3V3 logic 3.30V 1.00A              │
+│    M2 USB 5V    5.00V 1.00A              │
+│  ▸ M3 9V pedal  9.00V 2.00A              │
+│    M4 12V fan  12.00V 2.00A              │
+│    M5 LED test  5.00V 0.50A              │
+│    M6 24V rail 24.00V 2.00A              │
+╰──────────────────────────────────────────╯
+╭─ M3 · 9V pedal ──────────────────────────╮
+│ V  09.00  V   I  2.000  A                │
+│ ✓ within 20.05 V / 5.10 A                │
+╰──────────────────────────────────────────╯
+ Now 5.00 V / 1.500 A  ! M6 above 20.05 V
+ ⏎  recall   s  save   Esc  back   ?  help
