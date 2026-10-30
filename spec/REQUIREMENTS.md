@@ -18,7 +18,7 @@ Status: baseline, 2026-10-30. The index that connects the specification to tests
 | PRT-01 | Send the connect frame `F1 C1 00 01 01 02` on every port open (and every reconnect) before anything else; without it the device is silent | MAIN §3, PROTOCOL §3, APP §2 | V | L1 L2 M |
 | PRT-02 | Frame codec: checksum on encode and decode; resync on `0xF0`; tolerate partial frames at open and pushed frames interleaved with replies; match replies by type, not arrival order | PROTOCOL §2, MAIN §3 | V | L1 L2 |
 | PRT-03 | SET frames get no reply; after a write show the user's value, then reconcile with the next dump and show `Device kept {value}` if it differs by more than the display resolution | APP §3 | D | L1 |
-| PRT-04 | Values are sent at full precision and rounded for display only | DESIGN §4.3 | D | L1 |
+| PRT-04 | Setpoints, limits and presets are integer thousandths of their unit, converted to binary32 only at the wire; a value read and written back keeps its bits; measured values stay floats, rounded for display only | DESIGN §4.3 | D | L1 |
 | PRT-05 | On start the app changes no device setting; it connects, reads the full state and shows it; writes happen only on explicit user action | SAFETY §4.10, MAIN §3 | D | L1 L2 |
 | PRT-06 | Poll `FF` at the Refresh rate (default 10 Hz); skip a tick while the previous reply is outstanding; pushed frames update the model whenever they arrive | APP §2 | — | L1 L2 |
 | CLI-01 | Flags are `--port <path>`, `--help`, `--version` and nothing else in v1 | MAIN §6 | D | L1 |
@@ -62,7 +62,7 @@ Status: baseline, 2026-10-30. The index that connects the specification to tests
 | LNK-01 | The link is lost after 3 consecutive missed poll ticks (a skipped tick counts) | SAFETY §3 | D | L1 L2 |
 | LNK-02 | Never show stale or unknown numbers as live: measured values become dashes and the output state is shown as unknown (`?`), never OFF | SAFETY §3 | D | L1 L3 |
 | LNK-03 | While the link is down nothing that writes to the device is sent; edits, recalls and settings writes are refused with the notice | SAFETY §3 | D | L1 L2 |
-| LNK-04 | `Space` / `Ctrl-X` while down queue an output-OFF, sent as the first frame after reconnect; pressing `Space` again clears the queue | SAFETY §3 | D | L1 L2 |
+| LNK-04 | `Space` / `Ctrl-X` while down queue an output-OFF, sent as the first write after reconnect (after the connect frame and full state read, LNK-07); pressing `Space` again clears the queue | SAFETY §3 | D | L1 L2 |
 | LNK-05 | Typed entry and prompts are cancelled on link loss | SAFETY §3 | D | L1 |
 | LNK-06 | Reconnect: with Reconnect = on retry every 1 s; with off retry once per `r` | SAFETY §3 | D | L1 L2 |
 | LNK-07 | On reconnect: connect frame, full state read, queued OFF first, restore notice; writes stay blocked and the screen shows device values until the first full dump has arrived | SAFETY §3 | D | L1 L2 |
@@ -133,6 +133,8 @@ Status: baseline, 2026-10-30. The index that connects the specification to tests
 | APP-08 | Device I/O runs on its own thread; the UI thread never blocks on I/O | APP §7 | D | L1 |
 | APP-09 | An output-OFF command goes first in the queue, bypasses SET coalescing and is never dropped or merged away | APP §7 | D | L1 |
 | APP-10 | Every value that depends on unobserved device behaviour is a named item in one `constants` module and is listed in APP §8 | APP §8 | D | L1 |
+| APP-11 | Link logic (handshake, polling, missed ticks, reconnect, write queue) is a pure state machine with injected time; the device thread only moves bytes and calls it | APP §7 | D | L1 |
+| APP-12 | Second write check: the device core refuses any SET outside the device range or before the first full dump, independently of the app rules, and counts it as a defect | APP §7 | D | L1 |
 
 ## 11. Simulator (SIM)
 

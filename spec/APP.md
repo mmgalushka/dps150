@@ -1,6 +1,6 @@
 # dps150 — App and Device-layer Behaviour
 
-Status: v0.2, 2026-10-30, reviewed. Authority for how the app talks to the device and keeps its model: data binding, polling and update model, write read-back, configuration files, the connection state machine, frame and error handling, threading, and the register of unverified constants. §1–§4 were split from DESIGN.md v0.2; §5–§8 are new. The device it talks to (real or simulated) is described in PROTOCOL.md and [SIMULATOR.md](SIMULATOR.md). Wire-protocol facts are in [PROTOCOL.md](PROTOCOL.md); safety rules in [SAFETY.md](SAFETY.md); what the user sees in [DESIGN.md](DESIGN.md); scope and the decision log in [MAIN.md](MAIN.md). Requirement IDs: [REQUIREMENTS.md](REQUIREMENTS.md).
+Status: baseline, 2026-10-30. Authority for how the app talks to the device and keeps its model: data binding, polling and update model, write read-back, configuration files, the connection state machine, frame and error handling, threading, and the register of unverified constants. §1–§4 were split from DESIGN.md v0.2; §5–§8 are new. The device it talks to (real or simulated) is described in PROTOCOL.md and [SIMULATOR.md](SIMULATOR.md). Wire-protocol facts are in [PROTOCOL.md](PROTOCOL.md); safety rules in [SAFETY.md](SAFETY.md); what the user sees in [DESIGN.md](DESIGN.md); scope and the decision log in [MAIN.md](MAIN.md). Requirement IDs: [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## 1. Data binding
 
@@ -87,6 +87,8 @@ The `device` layer owns the link. States and transitions:
 ## 7. Threads and model ownership [D]
 
 - **Device thread.** One thread owns the port. It reads, decodes and writes; the UI thread never blocks on I/O. {#APP-08}
+- **Device core.** All link logic (the state machine of §5, polling, missed ticks, the write queue) lives in a pure state machine with injected time, built like `SimDevice` (SIMULATOR.md §2): bytes in, time in, commands in, bytes and events out. The thread only moves bytes and calls it, so these rules are tested without a port, a thread or sleeping. {#APP-11}
+- **Second write check.** The app rules of SAFETY.md §1 decide what the user may do. Independently, the device core refuses a SET outside the device range (voltage 0 … `E4`, current 0 … `E3`, limits 0 … `E4`..`E8`) or before the first full dump. A refusal is a defect, not a user path: it is counted for tests and shown as a notice. {#APP-12}
 - **Channels.** UI to device: typed commands (set voltage, set current, output on, output off, set limit, write preset, …). Device to UI: model updates, link-state changes and notices.
 - **Model.** The UI/app thread owns one model snapshot; the renderer reads only that snapshot (§2).
 - **Output OFF has priority.** An output-OFF command (`Space`, `Ctrl-X`, a prompt cancel) goes to the front of the queue, bypasses the 50 ms SET coalescing (DESIGN.md §7.1, `SAF-07`) and is never dropped or merged away. While the link is down it becomes the queued OFF of SAFETY.md §3.1. {#APP-09}

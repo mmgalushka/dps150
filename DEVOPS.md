@@ -1,6 +1,6 @@
 # dps150 — Development, CI and Distribution
 
-Status: DRAFT v0.1, 2026-10-29. Owns the toolchain, the development and test workflow, CI, the release process, where artifacts live and how users install them. Product goals, architecture and the decision log live in [spec/MAIN.md](spec/MAIN.md); this file does not repeat them.
+Status: baseline, 2026-10-30. Owns the toolchain, the development and test workflow, CI, the release process, where artifacts live and how users install them. Product goals, architecture and the decision log live in [spec/MAIN.md](spec/MAIN.md); this file does not repeat them.
 
 ## 1. Principles
 - **GitHub only, for now.** Source, CI, release artifacts and the Homebrew tap all live on GitHub. No external registry accounts.
@@ -28,7 +28,7 @@ helper.sh                  (planned) development entry point (§4.0)
 src/main.rs                (planned) `dps150`: argument parsing, wiring of the layers
 crates/                    (planned) one crate per layer of spec/MAIN.md §5
   protocol/                frame codec, checksum, typed registers; no I/O
-  device/                  transport trait, serial transport, handshake, polling, device thread
+  device/                  pure link state machine, serial transport, device thread
   app/                     model, commands, safety rules, config files
   ui/                      ratatui rendering and input, colour, fonts
   simulator/               library `SimDevice` and binary `dps150-sim`
@@ -40,7 +40,7 @@ tests/
 .github/workflows/         (planned) ci.yml and release.yml (§5)
 ```
 
-- **Dependencies point one way:** `protocol` ← `device` ← `app` ← `ui` ← `dps150`. `simulator` depends on `protocol` and, for the in-process tests, on the `device` trait; no production crate depends on `simulator`.
+- **Dependencies point one way:** `protocol` ← `device` ← `app` ← `ui` ← `dps150`. `simulator` depends only on `protocol`; no production crate depends on it, and `dps150-sim` is excluded from release artifacts.
 - **Shared test data stays at the root.** `tests/fixtures/` and `tests/golden/` are used by several crates, so tests locate them relative to the workspace root (for example `env!("CARGO_MANIFEST_DIR")/../../tests/golden`); they are never copied into a crate.
 - **Cross-crate and pty tests** (levels 1 and 2 of §4) live in the root package's `tests/*.rs`; unit tests stay in their crate.
 - **`.gitignore` allowlist.** Each planned item above needs its `!` rule in the same commit that adds the file (CONTRIBUTING.md): `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `deny.toml`, `helper.sh`, `/src/`, `/crates/` with `*.rs` and `Cargo.toml` per crate, and `.github/workflows/*.yml`. `tests/` also needs `*.rs`.
@@ -51,13 +51,13 @@ tests/
 - `helper.sh` wraps the common tasks (§4.0).
 
 ## 4. Development and testing
-The `device` layer is trait-based, so the simulator can stand in for the hardware at two levels.
+The `device` core is a pure state machine (spec/APP.md §7), so the simulator can stand in for the hardware at two levels.
 
 | Level | What runs | Covers |
 |---|---|---|
-| 1. In-process | `protocol` unit tests; `app` tests against the library `SimDevice` behind the `device` trait (spec/SIMULATOR.md) | Encoding, parsing, state logic. Fast, no I/O. |
+| 1. In-process | `protocol` unit tests; `device` and `app` tests with the pure device core piped to the library `SimDevice` (spec/SIMULATOR.md) | Encoding, parsing, state logic. Fast, no I/O. |
 | 2. Pseudo-terminal | `dps150-sim` (spec/SIMULATOR.md) opens a pty and prints its path; `dps150 --port <path>`; faults are injected through the simulator's stdin | The real `serialport` code path, including partial frames and pushed frames interleaved with replies (spec/MAIN.md §3). Port auto-detection by VID/PID is not covered. |
-| 3. UI golden and invariant tests | ratatui `TestBackend` with `insta` snapshots at the reference sizes (the files in `tests/golden/`, indexed in spec/DESIGN.md Appendix A); invariant checks (no overlap or clipping, key values visible) over a size sweep 44×16 … 250×80; reference sizes 44×16, 80×24, 100×21, 120×40 | Rendering against spec/DESIGN.md Appendix A and the Fluid stretch rules (spec/DESIGN.md §2.2). |
+| 3. UI golden and invariant tests | ratatui `TestBackend` compared cell by cell with the plain-text files in `tests/golden/` at their reference sizes (spec/DESIGN.md Appendix A); invariant checks (no overlap or clipping, key values visible) over a size sweep 44×16 … 250×80; reference sizes 44×16, 80×24, 100×21, 120×40 | Rendering against spec/DESIGN.md Appendix A and the Fluid stretch rules (spec/DESIGN.md §2.2). |
 
 - **Hardware checks are manual.** The test unit is on the author's Mac. USB does not pass through into the Linux sandbox or Docker on macOS, so the real port is used either directly on the Mac host or through the bridge below. spec/DESIGN.md §12 is the manual acceptance checklist.
 - **Hardware from the sandbox.** `sbx` cannot pass USB devices through, so the device is shared over a loopback TCP bridge; see §4.1. Read-only by default.
@@ -117,7 +117,7 @@ Two GitHub Actions workflows.
 - `cargo fmt --check`
 - `cargo clippy -- -D warnings`
 - `cargo test` on Linux and macOS
-- dependency audit (`cargo deny` or `cargo audit`)
+- dependency audit (`cargo deny check`, policy in `deny.toml`)
 
 **`release.yml`** — tag `v*`:
 - cargo-dist builds the target matrix (§6), creates the GitHub Release with archives and checksums, and updates the Homebrew formula.
@@ -151,7 +151,8 @@ sudo apt install ./dps150_<version>_<arch>.deb
 ```
 - Brew users update with `brew upgrade`. The `.deb` is installed from a file, so there is no apt repository and no `apt upgrade` updates.
 - Binaries installed through Homebrew or `curl` carry no quarantine flag, so macOS notarization is not required. A binary downloaded in a browser would trigger Gatekeeper.
-- Linux serial access needs membership of the `dialout` group (or a udev rule matching USB ID `2E3C:5740`, spec/PROTOCOL.md §1). The `.deb` should print a post-install note. To be documented with the device naming (`/dev/cu.usbmodem*` on macOS).
+- **Serial port naming.** macOS: `/dev/cu.usbmodem<serial>` (use `cu.`, not `tty.`). Linux: `/dev/ttyACM<n>`, the standard name for a CDC-ACM device; the unit has not been tried on Linux yet. Auto-detection finds the port by USB ID on both (spec/MAIN.md §6); `--port` overrides it.
+- **Linux permissions.** Serial access needs membership of the `dialout` group (`sudo usermod -aG dialout $USER`, then log in again), or a udev rule for USB ID `2E3C:5740` (spec/PROTOCOL.md §1): `SUBSYSTEM=="tty", ATTRS{idVendor}=="2e3c", ATTRS{idProduct}=="5740", MODE="0660", GROUP="dialout"`. The `.deb` prints this as a post-install note. macOS needs no setup.
 
 ## 9. Deferred
 To be reviewed later:

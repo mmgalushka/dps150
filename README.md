@@ -9,5 +9,6 @@ Terminal interface for FNIRSI DPS-150
 - [spec/APP.md](spec/APP.md): data binding, polling and update model, configuration files
 - [spec/SIMULATOR.md](spec/SIMULATOR.md): the device simulator: purpose, behaviour, assumed behaviour, fault-injection commands
 - [spec/REQUIREMENTS.md](spec/REQUIREMENTS.md): register of testable requirements with stable IDs, status and verification level
+- [spec/PLAN.md](spec/PLAN.md): implementation plan: stages, milestones, hardware session, requirement coverage
 - [DEVOPS.md](DEVOPS.md): toolchain, testing, CI, release and installation
 - [CONTRIBUTING.md](CONTRIBUTING.md): repository conventions (git ignore allowlist)

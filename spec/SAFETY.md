@@ -1,6 +1,6 @@
 # dps150 — Safety and Behaviour Rules
 
-Status: v0.1, 2026-10-30. Split from DESIGN.md v0.2. Authority for the host-side rules that keep the user and the load safe: ranges and limits, confirmations, link loss and reconnect, and the summary of safety rules. How these look on screen (layout, copy, styles) is in [DESIGN.md](DESIGN.md); polling, data binding and files are in [APP.md](APP.md); wire-protocol facts in [PROTOCOL.md](PROTOCOL.md); scope and the decision log in [MAIN.md](MAIN.md). Status tags **[D]**, **[P]**, **[U]** are as defined in DESIGN.md §0. Requirement IDs are listed in [REQUIREMENTS.md](REQUIREMENTS.md).
+Status: baseline, 2026-10-30. Split from DESIGN.md v0.2. Authority for the host-side rules that keep the user and the load safe: ranges and limits, confirmations, link loss and reconnect, and the summary of safety rules. How these look on screen (layout, copy, styles) is in [DESIGN.md](DESIGN.md); polling, data binding and files are in [APP.md](APP.md); wire-protocol facts in [PROTOCOL.md](PROTOCOL.md); scope and the decision log in [MAIN.md](MAIN.md). Status tags **[D]**, **[P]**, **[U]** are as defined in DESIGN.md §0. Requirement IDs are listed in [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## 1. Ranges and limits [D]
 
@@ -49,14 +49,14 @@ What the UI shows while the link is down is in DESIGN.md §6.7; this section own
 **Link lost.** The link is considered lost after 3 consecutive poll ticks without a complete reply (APP.md §2). The device is powered from its own input, so a pulled data cable most likely leaves the output ON (unverified, PROTOCOL.md §8): the UI therefore never claims it is off. {#LNK-01}
 
 - **Nothing that writes to the device is sent.** Edits, recalls, protection and settings writes are refused with the notice `Link down. Changes are not sent.` {#LNK-03}
-- `Space` and `Ctrl-X` **queue** an output-OFF, sent as the first frame when the port answers again, with the notice `Off queued · use the front-panel button`. The pending queue is cleared if the user presses `Space` again (toggle back). {#LNK-04}
+- `Space` and `Ctrl-X` **queue** an output-OFF, sent as the first write after reconnecting (§3.2), with the notice `Off queued · use the front-panel button`. The pending queue is cleared if the user presses `Space` again (toggle back). {#LNK-04}
 - Typed entry and prompts are cancelled when the link is lost. {#LNK-05}
 - The same unknown-state rules apply to the live strip (DESIGN.md §5.10) and the too-small screen (DESIGN.md §2.4).
 
 ### 3.2 Reconnect
 
 - With Settings → Reconnect = on, the app tries to reopen the port every 1 s while the link is down; with Reconnect = off it tries once per `r` press (DESIGN.md §9.2). {#LNK-06}
-- On success: send the connect frame (APP.md §2), read the full state, then send the queued output-OFF (if the user pressed `Space` or `Ctrl-X` while the link was down) as the **first** frame, discarding nothing the device did not change, then show a 3-second notice `Link restored · output ON at 12.00 V / 1.000 A`, or `Link restored · queued OFF sent, output OFF` when the queue was used (copy: DESIGN.md §10). {#LNK-07}
+- On success: send the connect frame (APP.md §2), read the full state, then send the queued output-OFF (if the user pressed `Space` or `Ctrl-X` while the link was down) as the **first** write, then show a 3-second notice `Link restored · output ON at 12.00 V / 1.000 A`, or `Link restored · queued OFF sent, output OFF` when the queue was used (copy: DESIGN.md §10). {#LNK-07}
 - Until the first full dump after reconnecting has arrived, all writes stay blocked and the SET values on screen are the device's, not the ones from before the loss.
 
 ## 4. Safety rules (summary) [D unless noted]

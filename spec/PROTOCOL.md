@@ -1,6 +1,6 @@
 # FNIRSI DPS-150 — Serial Protocol
 
-Status: v0.1, derived by interrogating a real unit on 2026-10-28 (firmware `V1.2`, hardware `V1.0`, model string `DPS-150`). This is the reference for the `protocol` and `device` crates (see spec/MAIN.md §3, §5).
+Status: baseline, 2026-10-30. Derived by interrogating a real unit on 2026-10-28 (firmware `V1.2`, hardware `V1.0`, model string `DPS-150`). This is the reference for the `protocol` and `device` crates (see spec/MAIN.md §3, §5).
 
 Legend: **[V]** verified on hardware, **[U]** unverified (from published sources or inferred).
 
@@ -128,7 +128,7 @@ Model/hardware/firmware strings (`DE`..`E0`) are not in the dump; GET them indiv
 
 ## 7. Key findings for implementers
 
-1. **The device does not validate SET values.** Writing 31.0 V to `C1` (above the 30 V limit and above the live max in `E2`), −1.0 V, and 6.0 A to `C2` (above 5.1 A) all read back verbatim. Whether the output stage clamps, and what the front panel shows, was not observed. **The host must clamp to `E2`/`E3`/`E4..E8` before sending**, and never send negative or non-finite values.
+1. **The device does not validate SET values.** Writing 31.0 V to `C1` (above the 30 V limit and above the live max in `E2`), −1.0 V, and 6.0 A to `C2` (above 5.1 A) all read back verbatim. Whether the output stage clamps, and what the front panel shows, was not observed. **The host must check against `E2`/`E3`/`E4..E8` before sending** (SAFETY.md §1), and never send negative or non-finite values.
 2. Protection thresholds are independent of setpoints; the device does not reject OVP < set V etc. (tested OVP 25 V with set V 12.3 V, which is fine; inverse case not tested). Host should enforce sane ordering.
 3. Float precision: values round-trip as binary32 (3.3 → 3.299999952). Round for display to 10 mV / 1 mA.
 4. Frame parsing must tolerate the push stream interleaved with replies, and partial frames at port open.
@@ -144,6 +144,7 @@ Model/hardware/firmware strings (`DE`..`E0`) are not in the dump; GET them indiv
 - Meaning of `0xB0`/`0xC0`; the unknown flags `D8`, `E1`.
 - Whether state set via SET survives power cycle; whether the push stream stops without a connect after idle.
 - Behaviour on unplug/replug; whether the device is silent until connect only after a power cycle (suspected: a session from the previous run persists).
+- Timing under load, read-only (no output needed): the sustained rate and latency of `GET FF` at 10 Hz, which `LNK-01` depends on (3 missed ticks are only 300 ms); and the real push rate, since §5 implies about 5 frames/s in total while a bridge session on 2026-10-29 counted about 21 frames/s.
 - Preset recall (selecting M1..M6 into setpoints) — no command identified; the host can emulate by writing `C1`/`C2` from the preset values.
 
 ## 9. Reference probe sequence

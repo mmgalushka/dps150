@@ -1,6 +1,6 @@
 # dps150 — Device Simulator
 
-Status: v0.1, 2026-10-30. Authority for the simulator: what it is for, how it is built, what it reproduces, what it only assumes, and how tests drive it. It models the device described in [PROTOCOL.md](PROTOCOL.md); app-side behaviour is in [APP.md](APP.md) and [SAFETY.md](SAFETY.md); the test levels are in [DEVOPS.md](../DEVOPS.md) §4. Requirement IDs `SIM-nn`: [REQUIREMENTS.md](REQUIREMENTS.md).
+Status: baseline, 2026-10-30. Authority for the simulator: what it is for, how it is built, what it reproduces, what it only assumes, and how tests drive it. It models the device described in [PROTOCOL.md](PROTOCOL.md); app-side behaviour is in [APP.md](APP.md) and [SAFETY.md](SAFETY.md); the test levels are in [DEVOPS.md](../DEVOPS.md) §4. Requirement IDs `SIM-nn`: [REQUIREMENTS.md](REQUIREMENTS.md).
 
 Labels: **[V]** reproduces behaviour verified on the real unit (PROTOCOL.md). **[A]** *assumed*: nobody has observed it on hardware; it is our choice, made so the app can be exercised. Every [A] behaviour is one named constant or one small function, is listed in §6, and any test that depends on it has `assumed` in its name. A hardware session replaces each [A] with a [V] or a fix.
 
@@ -19,7 +19,7 @@ It does not replace the manual hardware acceptance (DESIGN.md §12). It does not
 ## 2. Structure
 
 - **Library crate `simulator`.** A pure state machine, `SimDevice`, with no I/O and no clock of its own: `feed(bytes)` takes what the host wrote, `advance(dt)` moves simulated time forward, `take_output()` returns the bytes the device would send. Time is injected, so tests are deterministic and need no sleeping. {#SIM-02}
-- **In-process use.** Tests connect `SimDevice` to the `device` layer through a loopback transport behind the `device` trait (test level 1). No pty is involved.
+- **In-process use.** Tests pipe bytes directly between `SimDevice` and the pure device core (APP.md §7) under one injected clock (test level 1). No pty, thread or trait is involved.
 - **Binary `dps150-sim`.** A thin real-time wrapper: it opens a pseudo-terminal, prints its path on the first stdout line (`dps150-sim: listening on /dev/pts/5`), calls `advance` from the system clock, copies bytes between the pty and `SimDevice`, and reads control commands from stdin (§5). The app runs against it with `dps150 --port <path>` (test level 2; the real `serialport` code path). {#SIM-03}
 - Framing uses the `protocol` crate. A codec bug would therefore appear on both sides; the conformance test in §7 compares against raw captured bytes to catch exactly that.
 

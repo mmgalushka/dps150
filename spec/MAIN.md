@@ -1,6 +1,6 @@
 # dps150 — Specification
 
-Status: DRAFT v0.1. This document is the central artifact of the project. Every design decision must be reflected here before it is implemented.
+Status: baseline, 2026-10-30. This document is the central artifact of the project. Every design decision must be reflected here before it is implemented.
 
 Companion documents: [PROTOCOL.md](PROTOCOL.md) (wire protocol, verified behaviour), [DESIGN.md](DESIGN.md) (UI layout, colour scheme, screens, interaction), [SAFETY.md](SAFETY.md) (limits, confirmations, link loss, safety rules), [APP.md](APP.md) (data binding, polling, configuration files, connection and error handling), [SIMULATOR.md](SIMULATOR.md) (the device simulator) and [DEVOPS.md](../DEVOPS.md) (toolchain, testing, CI, release, distribution). [REQUIREMENTS.md](REQUIREMENTS.md) is the register of testable rules (stable IDs `PRT-01`, `SAF-03`, …) that tests and the implementation plan cite; the rule text stays in the source sections, tagged `{#ID}`. spec/MAIN.md owns goals, scope, architecture and the decision log; it links to the companions instead of repeating them.
 
@@ -34,7 +34,7 @@ Design consequences for this project:
 - Transport is USB CDC-ACM serial at 115200 8N1; the port is `/dev/cu.usbmodem*` on macOS (use `cu.`, not `tty.`).
 - The client sends the connect frame (`F1 C1 00 01 01 02`) on every port open; without it the device stays silent (PROTOCOL.md §3). {#PRT-01}
 - Once connected, the device pushes a few status frames at about 1 Hz on its own; the `device` layer polls the `FF` full dump for a coherent snapshot. The parser must tolerate pushed frames interleaved with replies and partial frames at port open.
-- SET frames get no reply, and the device does not validate values. The host must clamp every setpoint and protection threshold to the device limits before sending, and never send negative or non-finite values.
+- SET frames get no reply, and the device does not validate values. The host must check every setpoint and protection threshold against the device limits before sending (SAFETY.md §1: typed values are rejected, cursor steps stop at the limit, nothing is silently clamped), and never send negative or non-finite values.
 - Setpoint and protection writes persist in device settings; the app must restore or deliberately own them.
 - Still unverified (see PROTOCOL.md §8): output enable, protection trip behavior, persistence across power cycles.
 
@@ -48,7 +48,7 @@ The complete UI design (layout, colour scheme, screens, key bindings, formats) i
 ## 5. Architecture
 Rust workspace, layered (directory layout: [DEVOPS.md](../DEVOPS.md) §2.1):
 - `protocol`: pure encode/decode/checksum, unit-tested.
-- `device`: serial transport, handshake, polling, typed state; trait-based so a simulator can substitute.
+- `device`: a pure link state machine (handshake, polling, typed state, write queue) and a thin thread with the serial transport (APP.md §7), so a simulator can substitute at the byte level.
 - `app`: state, commands, presets.
 - `ui`: ratatui rendering and input. Implements [DESIGN.md](DESIGN.md) exactly: layouts, components, colour styles, screens and key map. The layout stretches to fill the terminal above a fixed Compact floor (DESIGN.md §2.2). Colour-depth detection and the style table (DESIGN.md §3) are `ui` responsibilities.
 - `simulator`: fake DPS-150 for development and CI: a library with a pure state machine plus the thin binary `dps150-sim` that exposes it as a pty and takes fault-injection commands (SIMULATOR.md). Unverified device behaviour is labelled *assumed* in it.
@@ -57,7 +57,7 @@ Rust workspace, layered (directory layout: [DEVOPS.md](../DEVOPS.md) §2.1):
 - Stack: Rust, ratatui, `serialport` crate. [Decided]
 - Name: `dps150` (package, binary, repository `mmgalushka/dps150`, public). [Decided]
 - macOS and Linux (Homebrew tap, `.deb`); Windows deferred. GitHub-only infrastructure for now. Details, targets and install commands: [DEVOPS.md](../DEVOPS.md).
-- Serial device naming and permissions (e.g., `/dev/cu.usbmodem*`, `dialout` group on Linux) to be documented.
+- Serial device naming and permissions: DEVOPS.md §8.
 
 ### Command line and port selection {#CLI-01} {#CLI-02}
 `dps150 [--port <path>] [--help] [--version]`. No other flags in v1.
@@ -87,7 +87,7 @@ Baseline 2026-10-30. Earlier entries (including superseded and withdrawn ones) a
 | baseline | v1 scope: live monitoring, set V/I and output, device presets M1–M6, protection limits, settings. Sequences (scripted ramps and steps) are out of scope | A lab bench supply does not need a scripting engine; it also removes the feature that depended most on unverified output-enable behaviour |
 | baseline | Rust + ratatui + `serialport`; name `dps150`, repository `mmgalushka/dps150` (public) | Single binary, best TUI library, native brew/apt packaging; crates.io and Debian names were free |
 | baseline | Protocol facts live in PROTOCOL.md, dev/CI/distribution in DEVOPS.md, UI in DESIGN.md, rules in SAFETY.md, app behaviour in APP.md; MAIN keeps goals, architecture and decisions only | Each changes independently (hardware verification, tooling, design); avoids duplicated, drifting text |
-| baseline | Host-side clamping and checking of every SET value | The device accepts out-of-range values verbatim (PROTOCOL.md §7) |
+| baseline | Host-side checking of every SET value; out-of-range values are rejected or stopped at the limit, never silently clamped (SAFETY.md §1) | The device accepts out-of-range values verbatim (PROTOCOL.md §7) |
 | baseline | The client always sends the connect frame `F1 C1 00 01 01 02` on open; device USB ID is 2E3C:5740 | The device is silent until connect (PROTOCOL.md §3); fixtures in `tests/fixtures/` |
 | baseline | Port selection: auto-detect by USB `2E3C:5740`; one match is used, zero or several exit 1 with the candidates listed; `--port <path>` overrides; v1 flags are `--port`, `--help`, `--version`; no picker UI | The VID/PID is shared by the generic Artery AT32 CDC port, so ambiguity is an error, not a guess |
 | baseline | Start-up failures exit 1 with a stderr message and there is no start screen; broken config files give defaults and a notice, never an overwrite (APP.md §5–§8) | Keeps the UI free of pre-connection states |
@@ -100,3 +100,7 @@ Baseline 2026-10-30. Earlier entries (including superseded and withdrawn ones) a
 | baseline | Simulator: library `SimDevice` (pure state machine, injected time) plus binary `dps150-sim` (pty and stdin fault injection); behaviour not observed on hardware is labelled *assumed* in one register. No `dps150` simulator mode | Serves tests, fault injection, development without the unit and demos; the pty covers the real serial path |
 | baseline | GitHub-only infrastructure; no hardware-in-the-loop CI; crates.io, apt repository, Windows and a non-interactive CLI are deferred (DEVOPS.md §9); goal wording uses the tap and local-`.deb` install commands | One platform, no extra accounts; unverified output-enable makes an unattended runner unsafe; bare `brew install dps150` needs homebrew-core |
 | baseline | A root `helper.sh` is the planned single entry point for development tasks (DEVOPS.md §4.0) | Removes the need to remember cargo, simulator and bridge invocations; CI does not depend on it |
+| 2026-10-30 | Setpoints, limits and presets are integer thousandths of their unit in the app; binary32 only at the wire; PRT-04 reworded | Steps and limit comparisons are exact, with no float error near safety limits; a read value written back keeps its bits |
+| 2026-10-30 | The device layer is a pure state machine with injected time plus a thin I/O thread (APP-11); it holds a second, independent range check on every SET (APP-12) | Link and timing rules test deterministically; a defect in the app rules still cannot put an out-of-range value on the wire of a device that accepts anything |
+| 2026-10-30 | Hardware session with a resistive load comes right after the `protocol` crate, before the simulator and any output code (PLAN.md §3) | Nobody has seen the output switch; finding wrong assumptions early avoids building safety logic and tests on them |
+| 2026-10-30 | Delivery in safety stages (read-only monitor, setpoints and limits, output control, completion), each run on the real unit; the first public release is complete v1.0.0 (PLAN.md) | Code that can write to the device does not exist until the read path is proven; no partial tool is published |
