@@ -1,0 +1,25 @@
+# Allowlist policy: ignore everything, then explicitly re-include.
+# See CONTRIBUTING.md before adding entries.
+*
+
+# Git / repo metadata
+!/.gitignore
+!/LICENSE
+!/README.md
+!/CONTRIBUTING.md
+!/DEVOPS.md
+
+# Specs: markdown only
+!/spec/
+!/spec/*.md
+
+# Scripts: shell only
+!/scripts/
+!/scripts/*.sh
+
+# Tests: captured binary fixtures and golden UI renderings (for now)
+!/tests/
+!/tests/fixtures/
+!/tests/fixtures/*.bin
+!/tests/golden/
+!/tests/golden/*.txt

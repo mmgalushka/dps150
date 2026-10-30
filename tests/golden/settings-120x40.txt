@@ -1,0 +1,40 @@
+ FNIRSI  DPS-150 · fw V1.2 · hw V1.0                                         ● connected  /dev/cu.usbmodem13C85FCE40251 
+ 4.998 V  0.512 A  2.56 W  CV · ON                                                                             SETTINGS 
+╭─ Device ─────────────────────────────── saved on device ─╮╭─ Safety ─────────────────────────────────────────────────╮
+│  ▸ Brightness                            ━━━━━━────  3   ││    Output on   ◂ ask first ▸                             │
+│    Volume                                ━━────────  1   ││    V jump over ◂ 5.0 V ▸                                 │
+│                                                          ││    I jump over ◂ 2.0 A ▸                                 │
+│ Model                                            DPS-150 ││    On exit     ◂ leave output ▸                          │
+│ Hardware                                            V1.0 ││                                                          │
+│ Firmware                                            V1.2 ││ Out-of-range values are rejected;                        │
+│ Limits                              30 V · 5.1 A · 150 W ││ steps stop at the limits. Always on.                     │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+╭─ Display ────────────────────────────────────────────────╮╭─ Connection ─────────────────────────────────────────────╮
+│    Theme       ◂ Midnight Slate ▸                        ││ Port                               usbmodem13C85FCE40251 │
+│    Colours     ◂ auto · 24-bit ▸                         ││ Baud                                              115200 │
+│ Set precision                               10 mV / 1 mA ││    Auto-detect ◂ on ▸                                    │
+│    Refresh     ◂ 10 Hz ▸                                 ││    Reconnect   ◂ on ▸                                    │
+│                                                          ││                                                          │
+│                                                          ││ Link                                         ● connected │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+ ↑↓  item   ←→  change   Tab  next group   Space  output   Esc  back   ?  help  

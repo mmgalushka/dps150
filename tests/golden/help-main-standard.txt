@@ -1,0 +1,24 @@
+ FNIRSI  DPS-150 · fw V1.2                   ● connected  usbmodem13C85FCE40251
+╭─ Help · main panel ──────────────────────────────────────── ? or Esc closes ─╮
+│ Edit                                  Screens                                │
+│ ←→       move the digit cursor        p   Presets       ,  Settings          │
+│ ↑↓       change the digit             o   Protection                         │
+│ 0-9 .    type a value, ⏎ applies      m 1-6   recall preset M1–M6            │
+│ ⏎        type a value                 q   quit (asks if output is ON)        │
+│ Tab      switch Voltage / Current     Space   output on / off                │
+│ v i      type voltage / current       Ctrl-X  output OFF, always             │
+│                                                                              │
+│ Glossary                                                                     │
+│ CV   constant voltage: the load draws less than the current limit.           │
+│ CC   current limiting: the current is held at the limit, voltage falls.      │
+│ OVP OCP OPP OTP LVP   over-voltage, over-current, over-power,                │
+│                       over-temperature, low input voltage.                   │
+│ A tripped protection turns the output off. Space clears it.                  │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Esc  close

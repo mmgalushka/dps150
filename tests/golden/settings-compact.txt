@@ -1,0 +1,13 @@
+ FNIRSI  DPS-150                ● connected
+ 4.998 V  0.512 A  2.56 W  ON      SETTINGS
+╭─ Settings ───────────────────────────────╮
+│  ▸ Brightness            ━━━━━━────  3   │
+│    Volume                ━━────────  1   │
+│    Output on   ◂ ask first ▸             │
+│    V jump over ◂ 5.0 V ▸                 │
+│    I jump over ◂ 2.0 A ▸                 │
+│    On exit     ◂ leave output ▸          │
+│    Refresh     ◂ 10 Hz ▸                 │
+│    Reconnect   ◂ on ▸                    │
+╰──────────────────────────────────────────╯
+ ←→  change   Esc  back   ?  help

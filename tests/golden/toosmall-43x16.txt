@@ -1,0 +1,16 @@
+
+
+
+
+
+
+            Terminal too small
+          need 44×16, have 43×16
+        output ON 3.30 V / 0.200 A
+
+
+
+
+
+
+
