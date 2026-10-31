@@ -147,7 +147,7 @@ Only H1 depends on the user being present, plus the stage gates and the M8 steps
 
 | Risk | Effect | Response |
 |---|---|---|
-| `serialport` may not open a pty on macOS | Level 2 tests fail on macOS | Found in the M0 spike. Fall back to running level 2 on Linux only in CI; the Mac still tests the real port by hand |
+| `serialport` cannot open a pty at 115200 on macOS (confirmed in the M0 spike, DEVOPS.md §4) | Level 2 tests cannot run on macOS | Level 2 runs on Linux only in CI; the Mac still tests the real port by hand |
 | 300 ms link-loss window is too tight for the real device or the bridge | False link loss, which closes the port and cancels prompts | Measured in H1 Part A. If needed, change `MISSED_TICKS` or the tick accounting through the decision log |
 | H1 finds output or trip behaviour unlike the assumptions | Safety rules may need new behaviour | That is why H1 comes first; changes go through the specification before M6 |
 | No resistive load available when H1 is due | M6 blocked | M2 to M5 can continue on [A] behaviours (§4) |

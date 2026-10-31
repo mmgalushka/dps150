@@ -1,5 +1,15 @@
 # Contributing
 
+## Development commands
+
+`helper.sh` is the entry point for everyday tasks (DEVOPS.md §4.0).
+
+| Command | Does |
+| --- | --- |
+| `./helper.sh build` | Build every crate in the workspace |
+| `./helper.sh test` | Run every test in the workspace |
+| `./helper.sh lint` | Check formatting, run clippy and audit dependencies (needs `cargo-deny`) |
+
 ## Git ignore policy: ignore everything except...
 
 `.gitignore` uses an **allowlist**. The first rule is `*`, which ignores every
@@ -47,3 +57,9 @@ Rules to remember:
 | `scripts/*.sh` | Helper shell scripts |
 | `tests/fixtures/*.bin` | Captured binary protocol fixtures |
 | `tests/golden/*.txt` | Golden UI renderings (plain text, one per screen and state) |
+| `tests/*.rs` | Cross-crate and pseudo-terminal tests |
+| `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `deny.toml` | Workspace and toolchain configuration |
+| `src/*.rs` | The `dps150` binary |
+| `crates/*/Cargo.toml`, `crates/*/src/*.rs` | Workspace crates |
+| `helper.sh` | Development entry point |
+| `.github/workflows/*.yml` | CI workflows |

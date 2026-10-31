@@ -1,0 +1,16 @@
+# Dependency audit policy, run by `cargo deny check` in CI (DEVOPS.md §5).
+
+[advisories]
+ignore = []
+
+[licenses]
+allow = ["Apache-2.0", "MIT", "MPL-2.0", "Unicode-3.0"]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

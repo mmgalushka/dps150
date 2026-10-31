@@ -23,3 +23,25 @@
 !/tests/fixtures/*.bin
 !/tests/golden/
 !/tests/golden/*.txt
+
+# Rust workspace
+!/Cargo.toml
+!/Cargo.lock
+!/rust-toolchain.toml
+!/deny.toml
+!/src/
+!/src/*.rs
+!/crates/
+!/crates/*/
+!/crates/*/Cargo.toml
+!/crates/*/src/
+!/crates/*/src/*.rs
+!/tests/*.rs
+
+# Development entry point
+!/helper.sh
+
+# CI workflows
+!/.github/
+!/.github/workflows/
+!/.github/workflows/*.yml
