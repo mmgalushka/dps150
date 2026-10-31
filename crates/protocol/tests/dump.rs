@@ -168,3 +168,60 @@ fn prt_02_dump_in_constant_current_mode() {
     data[109] = 0;
     assert_eq!(dump_of(data).unwrap().mode, Mode::ConstantCurrent);
 }
+
+/// A real reply recorded from the unit on 2026-11-01 (H1 Part A): output off,
+/// 3.3 V and 2.0 A set, which is what the front panel showed.
+#[test]
+fn prt_02_real_dump_from_the_unit_decodes() {
+    let bytes = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/ff-dump.bin"
+    ))
+    .unwrap();
+    let frames = Reader::new(Dir::DeviceToHost).feed(std::time::Duration::ZERO, &bytes);
+    assert_eq!(frames.len(), 1);
+    let Reply::Dump(dump) = Reply::from_frame(&frames[0]).unwrap() else {
+        panic!()
+    };
+    assert_eq!(dump.set_voltage, Millivolts::new(3300));
+    assert_eq!(dump.set_current, Milliamps::new(2000));
+    assert!(!dump.output_on);
+    assert_eq!(dump.mode, Mode::ConstantVoltage);
+    assert_eq!(dump.protection, 0);
+    assert!(
+        (20.0..21.0).contains(&dump.input_voltage),
+        "{}",
+        dump.input_voltage
+    );
+    assert!(
+        (15.0..40.0).contains(&dump.temperature),
+        "{}",
+        dump.temperature
+    );
+    assert_eq!(dump.output.power, 0.0);
+    assert!(
+        dump.presets
+            .iter()
+            .all(|p| p.voltage == Millivolts::new(5000) && p.current == Milliamps::new(1000))
+    );
+    assert_eq!(dump.ovp, Millivolts::new(30_000));
+    assert_eq!(dump.ocp, Milliamps::new(5_100));
+    assert_eq!(dump.opp, Milliwatts::new(150_000));
+    assert_eq!(dump.otp, MilliCelsius::new(80_000));
+    assert_eq!(dump.lvp, Millivolts::new(5_000));
+    assert_eq!(
+        (dump.brightness, dump.volume, dump.flag_d8, dump.flag_e1),
+        (3, 1, 1, 1)
+    );
+    assert_eq!(dump.max_current, Milliamps::new(5_100));
+    assert!(
+        (20_000..20_100).contains(&dump.max_voltage.get()),
+        "{:?}",
+        dump.max_voltage
+    );
+    assert_eq!(dump.ovp_range, Millivolts::new(30_000));
+    assert_eq!(dump.ocp_range, Milliamps::new(5_100));
+    assert_eq!(dump.opp_range, Milliwatts::new(150_000));
+    assert_eq!(dump.otp_range, MilliCelsius::new(99_000));
+    assert_eq!(dump.lvp_range, Millivolts::new(30_000));
+}

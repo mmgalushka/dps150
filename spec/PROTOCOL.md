@@ -83,9 +83,9 @@ All types `00`–`FF` not listed above produced no reply to GET.
 
 ## 5. Update model
 
-- The device **pushes unsolicited** `A1` frames about once per second, cycling these types: `C0`, `C3`, `C4`, `E2`, `E3` (≈1 Hz each, interleaved) [V]. In `tests/fixtures/capture-dev-to-host.bin` (345 frames, all checksums valid) the order within a cycle is `C3`, `C0`, `E2`, `E3`, `C4` [V]; the first frames carry input 20.234 V, temperature 23.608 °C, live maximum 20.034 V and 5.1 A. On 2026-10-29 this started only after the `C1` connect frame (see §3); on 2026-10-28 it had appeared on plain open, so treat connect as required.
+- The device **pushes unsolicited** `A1` frames about once per second, cycling these types: `C0`, `C3`, `C4`, `E2`, `E3` (about 1.6 Hz each, interleaved, about 8 frames/s in total) [V 2026-11-01]. In `tests/fixtures/capture-dev-to-host.bin` (345 frames, all checksums valid) the order within a cycle is `C3`, `C0`, `E2`, `E3`, `C4` [V]; the first frames carry input 20.234 V, temperature 23.608 °C, live maximum 20.034 V and 5.1 A. On 2026-10-29 this started only after the `C1` connect frame (see §3); on 2026-10-28 it had appeared on plain open, so treat connect as required. H1 Part A (2026-11-01, output off, 10 s without polling, then 60 s of polling) counted 7.7 and 8.5 frames/s without polling on the bridge and directly, 1.5 to 1.7 per second for each of the five types, and 7.8 to 8.0 frames/s while polling `FF` at 10 Hz. The 5 frames/s implied above and the 21 frames/s of the 2026-10-29 bridge session were both wrong.
 - Everything else is poll-only (GET) or returned in the `FF` dump.
-- Polling `FF` is the simplest way to get a coherent snapshot; replies arrive within ~100 ms [V].
+- Polling `FF` is the simplest way to get a coherent snapshot [V]. H1 Part A, `GET FF` at 10 Hz for 60 s, directly on the Mac (the bridge adds about 1 ms and shows the same pattern): median reply 0.4 ms, but about 4 % of replies take 90 to 125 ms (p95 94 ms, max 125 ms). A slow reply arrives after the next tick, so that tick is skipped (24 of 600); the worst gap between replies was 225 ms and the longest run of missed ticks was 1, so `LNK-01` (3 missed ticks, 300 ms) did not fire. The margin is about 75 ms. [V 2026-11-01]
 - SET frames get no reply. The setpoint shows up in the next GET/`FF` [V].
 
 ## 6. Full dump (`GET FF`, 139-byte payload) [V]
@@ -126,6 +126,8 @@ Offsets within the payload; all floats little-endian.
 
 Model/hardware/firmware strings (`DE`..`E0`) are not in the dump; GET them individually.
 
+The offsets were checked against the unit on 2026-11-01 with `tests/fixtures/ff-dump.bin`, a real reply: set voltage 3.3 V and set current 2.0 A match the front panel, and every other field decodes to a plausible value.
+
 ## 7. Key findings for implementers
 
 1. **The device does not validate SET values.** Writing 31.0 V to `C1` (above the 30 V limit and above the live max in `E2`), −1.0 V, and 6.0 A to `C2` (above 5.1 A) all read back verbatim. Whether the output stage clamps, and what the front panel shows, was not observed. **The host must check against `E2`/`E3`/`E4..E8` before sending** (SAFETY.md §1), and never send negative or non-finite values.
@@ -144,7 +146,7 @@ Model/hardware/firmware strings (`DE`..`E0`) are not in the dump; GET them indiv
 - Meaning of `0xB0`/`0xC0`; the unknown flags `D8`, `E1`.
 - Whether state set via SET survives power cycle; whether the push stream stops without a connect after idle.
 - Behaviour on unplug/replug; whether the device is silent until connect only after a power cycle (suspected: a session from the previous run persists).
-- Timing under load, read-only (no output needed): the sustained rate and latency of `GET FF` at 10 Hz, which `LNK-01` depends on (3 missed ticks are only 300 ms); and the real push rate, since §5 implies about 5 frames/s in total while a bridge session on 2026-10-29 counted about 21 frames/s.
+- ~~Timing under load, read-only~~ Done in H1 Part A (2026-11-01), see §5: `LNK-01` holds with a margin of about 75 ms over 60 s; the 10-minute run of the stage 1 gate (PLAN.md §1) is the longer test.
 - Preset recall (selecting M1..M6 into setpoints) — no command identified; the host can emulate by writing `C1`/`C2` from the preset values.
 
 ## 9. Reference probe sequence

@@ -144,7 +144,7 @@ Status: baseline, 2026-10-30. The index that connects the specification to tests
 | SIM-02 | Library crate `simulator`: a pure state machine (`feed`, `advance`, `take_output`) with injected time and no I/O | SIMULATOR §2 | D | L1 |
 | SIM-03 | Binary `dps150-sim` opens a pty, prints its path on the first stdout line, runs in real time and reads control commands from stdin | SIMULATOR §2 | D | L2 |
 | SIM-04 | Initial state equals the state observed on the test unit | SIMULATOR §3 | V | L1 |
-| SIM-05 | Silent until the connect frame; then pushes `C3`, `C0`, `E2`, `E3`, `C4` every 200 ms each | SIMULATOR §3 | V | L1 L2 |
+| SIM-05 | Silent until the connect frame; then pushes `C3`, `C0`, `E2`, `E3`, `C4` in turn, one frame every 125 ms | SIMULATOR §3 | V | L1 L2 |
 | SIM-06 | `GET` of a known type is answered (`FF` is the 139-byte dump); unknown types get no reply | SIMULATOR §3 | V | L1 |
 | SIM-07 | `SET` of writable types is stored verbatim without validation and without an acknowledgement | SIMULATOR §3 | V | L1 |
 | SIM-08 | Output model: resistive load, CV/CC, power, output limited to the live maximum | SIMULATOR §4 | U | L1 |
