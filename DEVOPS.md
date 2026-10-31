@@ -13,20 +13,20 @@ Status: baseline, 2026-10-30. Owns the toolchain, the development and test workf
 | Name | `dps150` (package and binary) |
 | Repository | `mmgalushka/dps150`, public |
 | Homebrew tap | `mmgalushka/homebrew-tap` |
-| Language | Rust (toolchain pinned in `rust-toolchain.toml`, MSRV to be set) |
+| Language | Rust (toolchain pinned in `rust-toolchain.toml`, MSRV equals the pinned toolchain) |
 
 ### 2.1 Repository layout
 Items marked *(planned)* do not exist yet; the rest is in the repository.
 
 ```
 README.md  CONTRIBUTING.md  DEVOPS.md  LICENSE  .gitignore
-Cargo.toml                 (planned) workspace root; also the package of the `dps150` binary
-Cargo.lock                 (planned) committed: the project ships a binary
-rust-toolchain.toml        (planned)
-deny.toml                  (planned) dependency audit policy (§5)
-helper.sh                  (planned) development entry point (§4.0)
-src/main.rs                (planned) `dps150`: argument parsing, wiring of the layers
-crates/                    (planned) one crate per layer of spec/MAIN.md §5
+Cargo.toml                 workspace root; also the package of the `dps150` binary
+Cargo.lock                 committed: the project ships a binary
+rust-toolchain.toml
+deny.toml                  dependency audit policy (§5)
+helper.sh                  development entry point (§4.0)
+src/main.rs                `dps150`: argument parsing, wiring of the layers
+crates/                    one crate per layer of spec/MAIN.md §5
   protocol/                frame codec, checksum, typed registers; no I/O
   device/                  pure link state machine, serial transport, device thread
   app/                     model, commands, safety rules, config files
@@ -37,17 +37,17 @@ scripts/                   hardware bridge and attach scripts (§4.1)
 tests/
   fixtures/                captured device bytes, read by `protocol` and `simulator` tests
   golden/                  reference renderings, read by `ui` tests (spec/DESIGN.md Appendix A)
-.github/workflows/         (planned) ci.yml and release.yml (§5)
+.github/workflows/         ci.yml, and release.yml (planned) (§5)
 ```
 
 - **Dependencies point one way:** `protocol` ← `device` ← `app` ← `ui` ← `dps150`. `simulator` depends only on `protocol`; no production crate depends on it, and `dps150-sim` is excluded from release artifacts.
 - **Shared test data stays at the root.** `tests/fixtures/` and `tests/golden/` are used by several crates, so tests locate them relative to the workspace root (for example `env!("CARGO_MANIFEST_DIR")/../../tests/golden`); they are never copied into a crate.
 - **Cross-crate and pty tests** (levels 1 and 2 of §4) live in the root package's `tests/*.rs`; unit tests stay in their crate.
-- **`.gitignore` allowlist.** Each planned item above needs its `!` rule in the same commit that adds the file (CONTRIBUTING.md): `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `deny.toml`, `helper.sh`, `/src/`, `/crates/` with `*.rs` and `Cargo.toml` per crate, and `.github/workflows/*.yml`. `tests/` also needs `*.rs`.
+- **`.gitignore` allowlist.** A new file type or directory needs its `!` rule in the same commit that adds the file (CONTRIBUTING.md).
 
 ## 3. Build prerequisites
 - Rust toolchain from `rust-toolchain.toml`.
-- Linux: `libudev-dev` (required by `serialport` for port enumeration).
+- Linux: `libudev-dev` and `pkg-config` (required by `serialport` for port enumeration).
 - `helper.sh` wraps the common tasks (§4.0).
 
 ## 4. Development and testing
@@ -63,15 +63,15 @@ The `device` core is a pure state machine (spec/APP.md §7), so the simulator ca
 - **Hardware from the sandbox.** `sbx` cannot pass USB devices through, so the device is shared over a loopback TCP bridge; see §4.1. Read-only by default.
 - **No hardware-in-the-loop CI.** Output-enable behaviour is unverified (spec/PROTOCOL.md §8), and an unattended runner able to switch a bench supply is a safety risk.
 
-### 4.0 Developer entry point: `helper.sh` (planned)
+### 4.0 Developer entry point: `helper.sh`
 
-A single `helper.sh` at the repository root is needed as the one entry point for everyday development tasks, so a contributor does not have to remember the cargo, simulator and bridge invocations. It is not implemented yet. Requirements:
+A single `helper.sh` at the repository root is the one entry point for everyday development tasks, so a contributor does not have to remember the cargo, simulator and bridge invocations. Build, test and lint exist today; the other commands below arrive with the milestones that need them. Requirements:
 
 - **Scope.** Thin dispatcher only: build, test (per level, §4), lint, start the simulator, run the app against the simulator or a given port, hardware bridge and attach (§4.1), and packaging. Logic stays in cargo and `scripts/`; `helper.sh` calls them.
 - **Behaviour.** Fails loudly (`set -euo pipefail`, real exit codes), checks that required tools are installed and says which one is missing, prints usage when called without or with an unknown command, and works with macOS bash 3.2.
 - **Safety.** Hardware commands are read-only by default (§4.1). Nothing that writes to the device or enables output is a plain command.
 - **CI.** CI stays as defined in §5 and does not depend on `helper.sh`; the script is a development aid.
-- **Documentation.** The command list and usage live in `CONTRIBUTING.md` (to be written together with the implementation), not in `README.md`.
+- **Documentation.** The command list and usage live in `CONTRIBUTING.md`, not in `README.md`.
 
 ### 4.1 Using the physical device from an `sbx` sandbox
 For contributors who develop inside a Docker Sandbox (`sbx`) on a Mac. The sandbox has no USB access (`sbx create --help` has no device option, checked 2026-10-29), so the host shares the serial port over TCP on loopback and the sandbox turns it back into a pseudo-terminal. The app only sees a normal serial port path.
@@ -114,10 +114,12 @@ sbx policy allow network localhost:5150
 Two GitHub Actions workflows.
 
 **`ci.yml`** — pull requests and pushes to `main`:
-- `cargo fmt --check`
-- `cargo clippy -- -D warnings`
-- `cargo test` on Linux and macOS
-- dependency audit (`cargo deny check`, policy in `deny.toml`)
+- `cargo fmt --all --check`
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`
+- `cargo test --workspace --locked` on Linux and macOS
+- dependency audit (`cargo deny --locked check`, policy in `deny.toml`)
+
+The root `Cargo.toml` is also the `dps150` package, so without `--workspace` (`--all` for `fmt`) cargo covers that package alone and skips the crates.
 
 **`release.yml`** — tag `v*`:
 - cargo-dist builds the target matrix (§6), creates the GitHub Release with archives and checksums, and updates the Homebrew formula.
