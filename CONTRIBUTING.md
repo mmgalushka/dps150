@@ -60,6 +60,6 @@ Rules to remember:
 | `tests/*.rs` | Cross-crate and pseudo-terminal tests |
 | `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `deny.toml` | Workspace and toolchain configuration |
 | `src/*.rs` | The `dps150` binary |
-| `crates/*/Cargo.toml`, `crates/*/src/*.rs` | Workspace crates |
+| `crates/*/Cargo.toml`, `crates/*/src/*.rs`, `crates/*/tests/*.rs` | Workspace crates and their integration tests |
 | `helper.sh` | Development entry point |
 | `.github/workflows/*.yml` | CI workflows |
