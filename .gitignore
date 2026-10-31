@@ -36,6 +36,8 @@
 !/crates/*/Cargo.toml
 !/crates/*/src/
 !/crates/*/src/*.rs
+!/crates/*/tests/
+!/crates/*/tests/*.rs
 !/tests/*.rs
 
 # Development entry point
