@@ -29,8 +29,8 @@ It does not replace the manual hardware acceptance (DESIGN.md §12). It does not
 
 **Session.**
 - The device is **silent until it receives the connect frame** `F1 C1 00 01 01 02` (no stream, no reply to GET). {#SIM-05}
-- After the connect frame it pushes one frame every 200 ms, cycling `C3`, `C0`, `E2`, `E3`, `C4` (the order in `tests/fixtures/capture-dev-to-host.bin`), so each type repeats about every second.
-- `GET` of a type in PROTOCOL.md §4 is answered with `F0 A1 <type> <len> <data> <ck>` at the next `advance` (well inside the observed ~100 ms). `GET FF` returns the 139-byte dump of PROTOCOL.md §6. The strings `DE`, `DF`, `E0` are ASCII without terminator. A `GET` of any other type gets no reply. {#SIM-06}
+- After the connect frame it pushes one frame every 125 ms, cycling `C3`, `C0`, `E2`, `E3`, `C4` (the order in `tests/fixtures/capture-dev-to-host.bin`), so each type repeats about every 0.6 s (the real unit sends about 8 frames/s, PROTOCOL.md §5).
+- `GET` of a type in PROTOCOL.md §4 is answered with `F0 A1 <type> <len> <data> <ck>` at the next `advance` (the real unit answers in under 1 ms, but about 4 % of replies take 90 to 125 ms, PROTOCOL.md §5; the `delay` command reproduces that). `GET FF` returns the 139-byte dump of PROTOCOL.md §6. The strings `DE`, `DF`, `E0` are ASCII without terminator. A `GET` of any other type gets no reply. {#SIM-06}
 
 **SET** (`F1 B1 <type> <len> <data> <ck>`): the types marked W in PROTOCOL.md §4 are stored **verbatim and without any validation** (31.0 V, −1.0 V and 6.0 A are all stored and read back); no acknowledgement is sent. Floats are stored as binary32. {#SIM-07}
 

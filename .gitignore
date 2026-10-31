@@ -38,6 +38,8 @@
 !/crates/*/src/*.rs
 !/crates/*/tests/
 !/crates/*/tests/*.rs
+!/crates/*/examples/
+!/crates/*/examples/*.rs
 !/tests/*.rs
 
 # Development entry point

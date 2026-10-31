@@ -132,6 +132,9 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "0.0.0"
+dependencies = [
+ "serialport",
+]
 
 [[package]]
 name = "quote"
