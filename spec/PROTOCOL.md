@@ -61,7 +61,7 @@ R = readable by GET, W = writable by SET [V unless marked]. "float" = 4 bytes LE
 | `D5` | LVP threshold (input under-voltage) | float, V | RW | 5.0 | Trips when the input voltage is below it [V 2026-11-02] |
 | `D6` | Brightness | u8 | RW | 3 | 0..10 read back as written; only the low 4 bits are kept (16 → 0, 17 → 1, 255 → 15). The display visibly dims and brightens, so the value takes effect; the panel's own range was not observed [V 2026-11-02] |
 | `D7` | Volume | u8 | RW | 1 | Same behaviour as `D6`; the sound turns off and on audibly [V 2026-11-02] |
-| `D8` | Unknown flag | u8 | R | 1 | Possibly "meter open/closed" [U] |
+| `D8` | Unknown flag | u8 | R | 1 | Read 1 in every state tried: idle, output ON in CV and CC, OVP trip, LVP trip [V 2026-11-02]. Meaning unknown |
 | `D9` | Capacity | float, Ah | R | 0.0 | Accumulates while the output is on, stays after OFF, resets on power cycle [V 2026-11-02] |
 | `DA` | Energy | float, Wh | R | 0.0 | Same as `D9` [V 2026-11-02] |
 | `DB` | Output state | u8: 0 = off, 1 = on | RW | 0 | `F1 B1 DB 01 01 DD` = ON, `F1 B1 DB 01 00 DC` = OFF [V 2026-11-02]. Needs the quiet gap after the SET (§7.7). On: V reaches the setpoint in about 1 s. Off: decays in about 0.5 s. `DB=01` while a protection is latched clears it **and** turns the output on (§7.9) |
@@ -70,7 +70,7 @@ R = readable by GET, W = writable by SET [V unless marked]. "float" = 4 bytes LE
 | `DE` | Model name | ASCII, no terminator | R | `DPS-150` | |
 | `DF` | Hardware version | ASCII | R | `V1.0` | |
 | `E0` | Firmware version | ASCII | R | `V1.2` | |
-| `E1` | Unknown flag | u8 | R | 1 | |
+| `E1` | Unknown flag | u8 | R | 1 | Same as `D8`: always 1 [V 2026-11-02] |
 | `E2` | Max settable voltage (live) | float, V | R | ≈20.05 | Tracks input voltage (20.25 V in → 20.05 V). Pushed. Inferred [U] |
 | `E3` | Max settable current | float, A | R | 5.1 | Pushed. Inferred [U] |
 | `E4` | Range limit for OVP | float, V | R | 30.0 | Inferred: `E4..E8` pair with `D1..D5` |
@@ -131,7 +131,7 @@ The offsets were checked against the unit on 2026-11-01 with `tests/fixtures/ff-
 
 ## 7. Key findings for implementers
 
-1. **The device does not validate SET values.** Writing 31.0 V to `C1` (above the 30 V limit and above the live max in `E2`), −1.0 V, and 6.0 A to `C2` (above 5.1 A) all read back verbatim. Whether the output stage clamps, and what the front panel shows, was not observed. **The host must check against `E2`/`E3`/`E4..E8` before sending** (SAFETY.md §1), and never send negative or non-finite values.
+1. **The device does not validate SET values.** Writing 31.0 V to `C1` (above the 30 V limit and above the live max in `E2`), −1.0 V, and 6.0 A to `C2` (above 5.1 A) all read back verbatim. **The output stage clamps to the live maximum**: with `C1` = 25 V, `C2` = 0.2 A and no load, the output delivered 19.98 V (`E2` was 20.05 V, input 20.24 V) and 0 A, in CV mode, with no trip. The front panel itself will not step the voltage setpoint above `E2` (20.05 V) nor the current above `E3` (5.1 A). [V 2026-11-02] **The host must check against `E2`/`E3`/`E4..E8` before sending** (SAFETY.md §1), and never send negative or non-finite values.
 2. Protection thresholds are independent of setpoints; the device does not reject OVP < set V etc. (tested OVP 25 V with set V 12.3 V, which is fine; inverse case not tested). Host should enforce sane ordering.
 3. Float precision: values round-trip as binary32 (3.3 → 3.299999952). Round for display to 10 mV / 1 mA.
 4. Frame parsing must tolerate the push stream interleaved with replies, and partial frames at port open.
@@ -148,8 +148,8 @@ H1 Part B (2026-11-02) resolved the output enable, `C3` order, `DD`, `D9`/`DA`, 
 
 - The meaning of the flags `D8` and `E1`: both read 1 with the output off and the session open; not yet read in other states.
 - **Display freeze.** In two sessions on 2026-11-02 the panel showed 0 V / 0 A / 0 W, stale setpoints (5 V / 0.6 A) and a stopped clock during a host session, while the unit delivered the host's setpoint. Unplugging the USB cable (or a power cycle) brought it back. In two later sessions of the same kind, including a 3-minute output-ON hold and the brightness/volume probe, the display worked normally, and host setpoint changes showed on the panel. The cause is unknown; it did not reproduce with a long read pause (90 s) or with extreme brightness/volume values.
-- Whether brightness and volume have a smaller range on the panel than the 0..15 the register keeps.
-- Behaviour when values are set out of range on the display itself (clamp vs accept).
+- Panel ranges seen at the front panel on 2026-11-02: brightness 13 steps, volume 15 steps (the register keeps 0..15; how the steps map to values was not recorded).
+- The multimeter reading at the 19.98 V output (the unit reported `C3` = 19.98 V).
 - A SET to `C0` or `C4`; whether any other register accepts writes.
 - Whether the quiet gap after a SET applies to the connect and close frames as well (the close frame was always sent after a gap).
 - The multimeter once read 2.8 V on the terminals while the unit reported 3.3 V and 0.317 A (a 3.28 V reading just before). A 3-minute hold at 3.3 V showed a steady `C3` (3.300 V, 0.317 A, temperature up 0.7 °C), so the unit did not sag; the cause is probably a contact or the meter.

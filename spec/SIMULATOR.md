@@ -47,7 +47,7 @@ It does not replace the manual hardware acceptance (DESIGN.md §12). It does not
 The output switch and protections were observed on 2026-11-02 (PROTOCOL.md §4, §7); what remains assumed is marked [A].
 
 - **Load.** A resistive load `R` (default 10 Ω) or *open* (no load).
-- **Output off:** `C3` = 0 V, 0 A, 0 W [V]. **Output on:** if `Vset ≤ Iset · R` the supply is in CV: `V = Vset`, `I = V / R`, `DD` = 1; otherwise in CC: `I = Iset`, `V = I · R`, `DD` = 0 [V]. `P = V · I`. With *open* load, `I = 0` and CV [A]. The output voltage is limited to the live maximum `E2`: the setpoint above `E2` is stored but not delivered [A]. The voltage ramps up in about 1 s and decays in about 0.5 s [V]. {#SIM-08}
+- **Output off:** `C3` = 0 V, 0 A, 0 W [V]. **Output on:** if `Vset ≤ Iset · R` the supply is in CV: `V = Vset`, `I = V / R`, `DD` = 1; otherwise in CC: `I = Iset`, `V = I · R`, `DD` = 0 [V]. `P = V · I`. With *open* load, `I = 0` and CV [A]. The output voltage is limited to just below the live maximum `E2` (19.98 V delivered when `E2` was 20.05 V): the setpoint above `E2` is stored but not delivered, with no trip [V]. The voltage ramps up in about 1 s and decays in about 0.5 s [V]. {#SIM-08}
 - **Live maximum.** `E2 = Vin − 0.2` (the capture shows 20.034 V for 20.234 V in, equal to binary32 precision), limited to 0..30 V. `E3` = 5.1 A [V].
 - **Output enable.** `SET DB = 01` turns the output on, `SET DB = 00` off [V]. `DB = 01` while a protection is latched **clears it and turns the output on** [V]; `DB = 00` does not clear it. {#SIM-09}
 - **Protections.** After every `advance`: trip OVP if `V > OVP`; OCP if `I > OCP`; OPP if `P > OPP`; OTP if `temperature > OTP`; LVP if `Vin < LVP` [V]. The comparison is strict: equality does not trip [V]. On a trip the output turns off and `DC` takes the code `1` OVP, `2` OCP, `3` OPP, `4` OTP, `5` LVP, `0` none (the same constant as in APP.md §8) [V]. OVP, OCP, OPP and OTP are **latched**: they stay after the cause is gone and after the threshold is restored, until `DB = 01`. LVP is **not** latched and clears when `Vin ≥ LVP` [V]. OTP and LVP trip even with the output off [V]. The short beep and the panel icon are not modelled. {#SIM-10}
@@ -80,7 +80,7 @@ The same operations exist as library methods on `SimDevice` and as one-line comm
 |---|---|---|---|
 | `DB` switching, `DD` CV/CC, `C3` order, `DC` codes, latching, clear by `DB = 01`, strict comparison | §4 | Verified 2026-11-02 | none need `assumed` any more |
 | Open load gives `I = 0`, CV | §4 | Assumed | open-load tests |
-| Output voltage limited to `E2` | §4 | Assumed | live-maximum tests |
+| Output voltage limited to `E2` (clamp offset, about 0.07 V below) | §4 | Verified; the offset is observed once | live-maximum tests |
 | `SET_DROP_WINDOW` is 2 ms | §3 | Length assumed (0 to 5 ms observed) | write-gap tests |
 | `E2 = Vin − 0.2` | §4 | Already close to [V] | live-maximum tests |
 | Trip beep and panel icon, panel display during a session | §4 | Not modelled | none |
