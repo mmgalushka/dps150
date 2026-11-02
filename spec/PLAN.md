@@ -79,6 +79,8 @@ A supervised session with the user at the unit, driven by `hw_probe`. Every writ
 8. Pull the USB data cable with the output on, to a load that is safe to leave on.
 9. Restore the state recorded in A3.
 
+**Status:** Part A done 2026-11-01. Part B done 2026-11-02 (steps 1 to 8 resolved; step 9 restore done; remaining open items in PROTOCOL.md §8). The results changed behaviour in four places, all in the decision log of spec/MAIN.md (write gap, trip clearing, session close, cable pull).
+
 **Output:** PROTOCOL.md §8 items resolved to [V] or recorded as different; APP.md §8 constants and SIMULATOR.md §6 updated. A result that changes behaviour goes through the decision log. Anything that cannot be measured stays [U] behind its constant.
 
 ### M2. Simulator

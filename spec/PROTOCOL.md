@@ -1,6 +1,6 @@
 # FNIRSI DPS-150 — Serial Protocol
 
-Status: baseline, 2026-10-30. Derived by interrogating a real unit on 2026-10-28 (firmware `V1.2`, hardware `V1.0`, model string `DPS-150`). This is the reference for the `protocol` and `device` crates (see spec/MAIN.md §3, §5).
+Status: baseline, 2026-10-30; H1 Part B results added 2026-11-02. Derived by interrogating a real unit on 2026-10-28 (firmware `V1.2`, hardware `V1.0`, model string `DPS-150`). This is the reference for the `protocol` and `device` crates (see spec/MAIN.md §3, §5).
 
 Legend: **[V]** verified on hardware, **[U]** unverified (from published sources or inferred).
 
@@ -37,9 +37,10 @@ Frames can arrive back-to-back and interleaved with the periodic push stream (§
 | Cmd | Dir | Meaning | Status |
 |---|---|---|---|
 | `0xA1` | both | GET request (host) / data frame (device). Device replies to every GET with `F0 A1 <type> ...` | [V] |
-| `0xB1` | host→dev | SET. **The device sends no acknowledgement.** Confirm by GET of the same type. | [V] |
-| `0xC1` | host→dev | Connect/session open (`F1 C1 00 01 01 cksum`). **Required on 2026-10-29**: without it the device stayed silent (no stream, no GET reply, with or without DTR/RTS); right after it, the stream started. Earlier "not required" observation (2026-10-28) did not reproduce; likely the unit was already in a session. Always send it on open. | [V 2026-10-29] |
-| `0xB0`, `0xC0` | — | Unknown; not exercised. Possibly disconnect / baud-rate commands per community sources. | [U] |
+| `0xB1` | host→dev | SET. **The device sends no acknowledgement.** Confirm by GET of the same type. **Send nothing else for at least 50 ms after a SET**: a frame that follows within a few ms makes the device drop the SET (see §7.7). | [V 2026-11-02] |
+| `0xC1` | host→dev | Connect/session open and close. `F1 C1 00 01 01 02` opens a session and **locks the front panel** (lock icon, output button dead); `F1 C1 00 01 00 01` closes it, releases the lock, and the unit goes silent again (§7.8). Details of the open frame: (`F1 C1 00 01 01 cksum`). **Required on 2026-10-29**: without it the device stayed silent (no stream, no GET reply, with or without DTR/RTS); right after it, the stream started. Earlier "not required" observation (2026-10-28) did not reproduce; likely the unit was already in a session. Always send it on open. | [V 2026-10-29] |
+| `0xB0` | host→dev | Baud-rate selection per community sources (index 5 = 115200). Not exercised. | [U] |
+| `0xC0` | host→dev | **Firmware upgrade command per community sources (the USB port vanishes until the cable is unplugged). Never send it.** Not exercised. | [U] |
 
 ## 4. Parameter (type) table
 
@@ -50,22 +51,22 @@ R = readable by GET, W = writable by SET [V unless marked]. "float" = 4 bytes LE
 | `C0` | Input voltage | float, V | R | 20.25 | Pushed (§5) |
 | `C1` | Set voltage | float, V | RW | 3.3 | |
 | `C2` | Set current | float, A | RW | 2.0 | |
-| `C3` | Output measurement | 3×float: V, I, P | R | 0,0,0 (output off) | Pushed. Only the all-zero case was seen; V/I/P order from community sources [U] |
+| `C3` | Output measurement | 3×float: V, I, P | R | 0,0,0 (output off); 5.000 V / 0.480 A / 2.40 W on a 10 Ω load | Pushed. Order V, I, P [V 2026-11-02]. The voltage read about 20 mV above the multimeter and the display (5.000 V against 4.98 V) |
 | `C4` | Temperature | float, °C | R | 24.3 | Pushed |
 | `C5`..`D0` | Presets M1..M6 | pairs of float: (V, I). `C5`=M1 V, `C6`=M1 I, `C7`=M2 V, … `D0`=M6 I | RW (`C5`,`C6` tested) | all 5.0 V / 1.0 A | Device-side memory slots, writable |
 | `D1` | OVP threshold | float, V | RW | 30.0 | |
 | `D2` | OCP threshold | float, A | RW | 5.1 | |
 | `D3` | OPP threshold | float, W | RW | 150.0 | |
 | `D4` | OTP threshold | float, °C | RW | 80.0 | |
-| `D5` | LVP threshold (input under-voltage) | float, V | RW | 5.0 | Meaning inferred from name in community sources [U] |
-| `D6` | Brightness | u8 | RW | 3 | Range not probed (value 2 accepted) |
-| `D7` | Volume | u8 | RW | 1 | Range not probed (value 2 accepted) |
+| `D5` | LVP threshold (input under-voltage) | float, V | RW | 5.0 | Trips when the input voltage is below it [V 2026-11-02] |
+| `D6` | Brightness | u8 | RW | 3 | 0..10 read back as written; only the low 4 bits are kept (16 → 0, 17 → 1, 255 → 15). The range the panel actually uses was not observed [V 2026-11-02] |
+| `D7` | Volume | u8 | RW | 1 | Same behaviour as `D6` [V 2026-11-02] |
 | `D8` | Unknown flag | u8 | R | 1 | Possibly "meter open/closed" [U] |
-| `D9` | Capacity | float, Ah | R | 0.0 | Accumulated while output is on [U] |
-| `DA` | Energy | float, Wh | R | 0.0 | Accumulated while output is on [U] |
-| `DB` | Output state | u8: 0 = off, 1 = on | R (W [U]) | 0 | **Write not tested** — see §8 |
-| `DC` | Protection state | u8, 0 = none | R | 0 | Value→OVP/OCP/OPP/OTP/LVP mapping not tested [U] |
-| `DD` | Regulation mode | u8: 1 = CV, 0 = CC | R | 1 (CV) | CC value from community sources [U] |
+| `D9` | Capacity | float, Ah | R | 0.0 | Accumulates while the output is on, stays after OFF, resets on power cycle [V 2026-11-02] |
+| `DA` | Energy | float, Wh | R | 0.0 | Same as `D9` [V 2026-11-02] |
+| `DB` | Output state | u8: 0 = off, 1 = on | RW | 0 | `F1 B1 DB 01 01 DD` = ON, `F1 B1 DB 01 00 DC` = OFF [V 2026-11-02]. Needs the quiet gap after the SET (§7.7). On: V reaches the setpoint in about 1 s. Off: decays in about 0.5 s. `DB=01` while a protection is latched clears it **and** turns the output on (§7.9) |
+| `DC` | Protection state | u8: 0 none, 1 OVP, 2 OCP, 3 OPP, 4 OTP, 5 LVP | R | 0 | Mapping [V 2026-11-02]; behaviour in §7.9 |
+| `DD` | Regulation mode | u8: 1 = CV, 0 = CC | R | 1 (CV) | CC = 0 seen: Iset 0.2 A into 10 Ω gave 2.07 V / 0.200 A [V 2026-11-02] |
 | `DE` | Model name | ASCII, no terminator | R | `DPS-150` | |
 | `DF` | Hardware version | ASCII | R | `V1.0` | |
 | `E0` | Firmware version | ASCII | R | `V1.2` | |
@@ -134,18 +135,24 @@ The offsets were checked against the unit on 2026-11-01 with `tests/fixtures/ff-
 2. Protection thresholds are independent of setpoints; the device does not reject OVP < set V etc. (tested OVP 25 V with set V 12.3 V, which is fine; inverse case not tested). Host should enforce sane ordering.
 3. Float precision: values round-trip as binary32 (3.3 → 3.299999952). Round for display to 10 mV / 1 mA.
 4. Frame parsing must tolerate the push stream interleaved with replies, and partial frames at port open.
-5. Writes persist in device settings (presets, thresholds, brightness, volume were changed and then restored to original values by this investigation). Whether setpoints persist across power cycle was not tested.
-6. A SET to a read-only type (e.g. `C0`, `C4`, `DE`) was not tested.
+5. Writes persist in device settings (presets, thresholds, brightness, volume were changed and then restored to original values by this investigation). Setpoints (5 V / 0.6 A at the time) survived a power cycle; Ah/Wh counters reset. After a power cycle the unit is silent until the connect frame. [V 2026-11-02]
+6. A SET to a read-only type is **ignored**: `DE`, `E0` and `C3` were written and read back unchanged, with no other change. `C0` and `C4` were not tried. [V 2026-11-02]
+7. **A SET is lost if another frame follows too soon.** A GET sent immediately after `SET DB` made the SET be ignored 8 of 9 times. With a quiet gap of 5, 20, 50, 100 or 500 ms before the next frame, the SET worked every time (tested for ON; OFF with 500 ms). The first GET after a lost SET also got no reply. Rule: after every SET, send nothing for at least 50 ms (the reference constant is `SET_GAP`, 100 ms), and do not poll during the gap. `C1`/`C2` SETs followed by reads did work in earlier sessions, but the same rule applies to all SETs. [V 2026-11-02]
+8. **Session and front panel.** The connect frame locks the panel; the lock is not released by closing the port or by restarting the bridge, only by the close frame `F1 C1 00 01 00 01` or by unplugging the USB cable. While a session is open the panel display is not reliable: the big V/I/W readings show 0 and Vset/Iset show the stored values (5 V / 0.6 A) although the unit delivers the host's setpoint (3.3 V) as the multimeter confirmed. Host SETs of `C1`/`C2` do not appear on the panel. Use `C3` (and a meter), not the screen, as the truth. [V 2026-11-02]
+9. **Protection trips.** To trip, a threshold is set past the operating point (the test used 4.5 V OVP at 5 V, 0.3 A OCP at 0.48 A, 1 W OPP at 2.4 W, 20 °C OTP at 21 °C, 25 V LVP at 20.2 V input). On a trip the output turns off by itself (`DB` → 0), `DC` takes the code (§4), the panel shows the trip icon, and a short beep sounds. OVP/OCP/OPP/OTP are **latched**: restoring the threshold does not clear them, and `DB=00` does not clear them. A host `DB=01` (or one press of the panel output button) clears `DC` **and turns the output on** in one step; there is no clear-without-ON. LVP is **not latched**: it cleared by itself when the threshold was restored. OTP and LVP trip even with the output off. The comparison is strict: OVP equal to the output voltage (5.0 V at 5.0 V) did not trip. [V 2026-11-02]
+10. **Pulling the USB cable with the output ON leaves the output ON.** After replug the unit reported `DB=1` at the same setpoint, and Ah/Wh kept growing in between. The panel lock is released as soon as the cable is out and the panel buttons work. [V 2026-11-02]
 
 ## 8. Not verified / next steps
 
-- **Output enable**: `SET DB = 01/00` (`F1 B1 DB 01 01 DC`). Not tested because the output load was unknown; the unit was left with output off (`DB = 0`). Needs a safe resistive load. Also confirm: `C3` real V/I/P values, `DD` CC=0 vs CV=1, how `D9`/`DA` accumulate.
-- Protection trip: value mapping of `DC` and whether output turns off / how to clear it.
-- Ranges for brightness (`D6`) and volume (`D7`).
-- Behaviour when setting values out of range on the display itself (clamp vs accept).
-- Meaning of `0xB0`/`0xC0`; the unknown flags `D8`, `E1`.
-- Whether state set via SET survives power cycle; whether the push stream stops without a connect after idle.
-- Behaviour on unplug/replug; whether the device is silent until connect only after a power cycle (suspected: a session from the previous run persists).
+H1 Part B (2026-11-02) resolved the output enable, `C3` order, `DD`, `D9`/`DA`, the `DC` codes, trip latching and clearing, brightness and volume masking, read-only SET, power cycle and the cable pull (§4, §7). Still open:
+
+- The meaning of the flags `D8` and `E1`.
+- Whether brightness and volume have a smaller range on the panel than the 0..15 the register keeps.
+- Behaviour when values are set out of range on the display itself (clamp vs accept).
+- A SET to `C0` or `C4`; whether any other register accepts writes.
+- Whether the quiet gap after a SET applies to the connect and close frames as well (the close frame was always sent after a gap).
+- The multimeter once read 2.8 V on the terminals while the unit reported 3.3 V and 0.317 A (a 3.28 V reading just before); the cause is not known (contacts, the meter, or the resistor).
+- `0xB0` and `0xC0` were not exercised on purpose (§3).
 - ~~Timing under load, read-only~~ Done in H1 Part A (2026-11-01), see §5: `LNK-01` holds with a margin of about 75 ms over 60 s; the 10-minute run of the stage 1 gate (PLAN.md §1) is the longer test.
 - Preset recall (selecting M1..M6 into setpoints) — no command identified; the host can emulate by writing `C1`/`C2` from the preset values.
 
