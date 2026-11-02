@@ -156,5 +156,5 @@ Status: baseline, 2026-10-30. The index that connects the specification to tests
 | SIM-11 | Fault injection through library methods and stdin commands: `load`, `vin`, `temp`, `trip`, `keep`, `unplug`/`plug`, `close`/`reopen`, `corrupt`, `split`, `delay`, `powercycle`, `state`, `quit` | SIMULATOR §5 | D | L2 |
 | SIM-12 | Conformance: configured with the captured raw values and fed the captured host bytes, the simulator reproduces the first five frames of the captured device stream byte for byte and answers each `GET C0` | SIMULATOR §7 | V | L1 |
 | SIM-13 | A SET to a read-only type is ignored without any change | SIMULATOR §3 | V | L1 |
-| SIM-14 | A SET is discarded when another frame arrives within `SET_DROP_WINDOW` (2 ms) after it | SIMULATOR §3 | V | L1 |
+| SIM-14 | A SET, connect or close frame is discarded when another frame arrives within `SET_DROP_WINDOW` (2 ms) after it | SIMULATOR §3 | V | L1 |
 | SIM-15 | The connect frame locks the panel; the close frame or `unplug` unlocks it; `state` shows `locked` | SIMULATOR §3 | V | L1 |

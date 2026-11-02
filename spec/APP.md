@@ -107,4 +107,4 @@ Every value that depends on device behaviour nobody has observed lives in one mo
 | `LIMIT_MARGIN` | one resolution step: 10 mV, 1 mA, 0.1 W; equality allowed at a limit's device maximum | The device does not trip at equality (verified 2026-11-02), so the margin is host policy, not a device need |
 | Brightness / volume slider range | placeholder 5 steps | The register keeps 0..15 (PROTOCOL.md §4); the panel's own range is not known |
 
-Timing constants (not device-dependent): `MISSED_TICKS` 3, `HANDSHAKE_TIMEOUT` 3 s (retry at 1.5 s), `RECONNECT_INTERVAL` 1 s, `STALE_FRAME` 200 ms, `SET_COALESCE` 50 ms, `SET_GAP` 100 ms (nothing is sent for this long after any SET, polling included; PROTOCOL.md §7.7; a SET followed sooner by another frame is lost), `QUIT_READBACK` 500 ms.
+Timing constants (not device-dependent): `MISSED_TICKS` 3, `HANDSHAKE_TIMEOUT` 3 s (retry at 1.5 s), `RECONNECT_INTERVAL` 1 s, `STALE_FRAME` 200 ms, `SET_COALESCE` 50 ms, `SET_GAP` 100 ms (nothing is sent for this long after any SET or after the connect or close frame, polling included; PROTOCOL.md §7.7; a SET followed sooner by another frame is lost), `QUIT_READBACK` 500 ms.

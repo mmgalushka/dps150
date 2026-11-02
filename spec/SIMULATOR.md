@@ -36,7 +36,7 @@ It does not replace the manual hardware acceptance (DESIGN.md §12). It does not
 
 **SET to a read-only type** (`C3`, `DE`, `E0`, and all types not marked W in PROTOCOL.md §4) is ignored without any change. [V 2026-11-02] {#SIM-13}
 
-**Dropped SET.** A SET is discarded when another frame arrives within `SET_DROP_WINDOW` after its last byte (PROTOCOL.md §7.7). The real window is between 0 and 5 ms; the simulator uses 2 ms [A: the length only]. A device layer that polls right after a SET therefore fails its tests, as it fails on the unit. {#SIM-14}
+**Dropped SET.** A SET, a connect frame or a close frame is discarded when another frame arrives within `SET_DROP_WINDOW` after its last byte (PROTOCOL.md §7.7). The real window is between 0 and 5 ms; the simulator uses 2 ms [A: the length only]. A device layer that polls right after a SET therefore fails its tests, as it fails on the unit. {#SIM-14}
 
 **Session lock.** The connect frame locks the panel; the close frame `F1 C1 00 01 00 01` unlocks it and makes the device silent again; `unplug` also unlocks. `state` prints `locked`. [V] {#SIM-15}
 
