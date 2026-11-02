@@ -61,7 +61,7 @@ What the UI shows while the link is down is in DESIGN.md §6.7; this section own
 
 ### 3.3 Protection trips [D]
 
-Verified behaviour (PROTOCOL.md §7.9): a trip turns the output off, sets `DC`, and for OVP, OCP, OPP and OTP stays latched even when the cause is gone. **A host `DB = 01` clears the latch and turns the output on in the same step**; there is no clear-without-ON. LVP is not latched and clears when the input recovers. Rules: {#SAF-13}
+Verified behaviour (PROTOCOL.md §7.9): a trip turns the output off, sets `DC`, and for OVP, OCP, OPP and OTP stays latched even when the cause is gone. **A host `DB = 01` clears the latch and turns the output on in the same step**; the host has no clear-without-ON. (The panel Home key clears without turning the output on, but the host cannot send it.) LVP is not latched and clears when the input recovers. Rules: {#SAF-13}
 
 - Clearing a trip **is** turning the output ON. It uses the same path as any ON: the ordering rules of §1, the ON confirmation of §2 (shown with the voltage and current it will apply), and the live-maximum rule. The app never sends `DB = 01` for any other purpose.
 - While `DC` is non-zero the app shows the trip name, and `Space` offers `Clear {trip} and turn output ON at {V} / {I}?`. Before it does, it tells the user when the cause is still present (for example the measured power still exceeds the OPP limit); the app does not try to guess whether the device will trip again at once.
