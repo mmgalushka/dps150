@@ -54,6 +54,9 @@ Status: baseline, 2026-10-30. The index that connects the specification to tests
 | SAF-10 | Too-small screen: shows the output state; `Space` / `Ctrl-X` only turn the output OFF; `q` is ignored; `Ctrl-C` quits | DESIGN §2.4 | D | L1 L3 |
 | SAF-11 | Quit rules: `q` asks when it would leave the output ON; On exit = leave (default) or turn off with a 500 ms read-back; `Ctrl-C`/`SIGTERM`/`SIGHUP` quit without a prompt and follow the setting; the stdout line is printed last; exit status 1 if OFF cannot be confirmed | SAFETY §4.9 | D | L1 L2 M |
 | SAF-12 | Overwriting or clearing a preset slot asks first, unless the slot already holds exactly those values | DESIGN §8.1 | D | L1 |
+| SAF-13 | Clearing a trip is turning the output ON: same ordering rules and ON confirmation; `DB = 01` only for a deliberate ON; `DB = 00` never used to clear; no automatic retry after a failed clear | SAFETY §3.3 | D | L1 L2 M |
+| SAF-14 | On normal quit send the session close frame `F1 C1 00 01 00 01` after the quit output-off and its read-back | SAFETY §4.11 | D | L1 L2 M |
+| SAF-15 | After every SET send nothing for `SET_GAP` (100 ms), polling included; polls skipped in the gap do not count as missed for `LNK-01` | SAFETY §4.12 | D | L1 L2 |
 
 ## 5. Link loss (LNK)
 
@@ -148,7 +151,10 @@ Status: baseline, 2026-10-30. The index that connects the specification to tests
 | SIM-06 | `GET` of a known type is answered (`FF` is the 139-byte dump); unknown types get no reply | SIMULATOR §3 | V | L1 |
 | SIM-07 | `SET` of writable types is stored verbatim without validation and without an acknowledgement | SIMULATOR §3 | V | L1 |
 | SIM-08 | Output model: resistive load, CV/CC, power, output limited to the live maximum | SIMULATOR §4 | U | L1 |
-| SIM-09 | `DB` turns the output on and off; ignored while a protection is tripped | SIMULATOR §4 | U | L1 |
-| SIM-10 | Protections trip on their conditions, set `DC` codes 1..5, switch the output off, and clear on `DB = 00` once the cause is gone | SIMULATOR §4 | U | L1 |
+| SIM-09 | `DB` turns the output on and off; `DB = 01` while a protection is latched clears it and turns the output on | SIMULATOR §4 | V | L1 |
+| SIM-10 | Protections trip on their conditions (strictly beyond the threshold), set `DC` codes 1..5 and switch the output off; OVP, OCP, OPP and OTP stay latched until `DB = 01`, LVP clears when the cause is gone | SIMULATOR §4 | V | L1 |
 | SIM-11 | Fault injection through library methods and stdin commands: `load`, `vin`, `temp`, `trip`, `keep`, `unplug`/`plug`, `close`/`reopen`, `corrupt`, `split`, `delay`, `powercycle`, `state`, `quit` | SIMULATOR §5 | D | L2 |
 | SIM-12 | Conformance: configured with the captured raw values and fed the captured host bytes, the simulator reproduces the first five frames of the captured device stream byte for byte and answers each `GET C0` | SIMULATOR §7 | V | L1 |
+| SIM-13 | A SET to a read-only type is ignored without any change | SIMULATOR §3 | V | L1 |
+| SIM-14 | A SET, connect or close frame is discarded when another frame arrives within `SET_DROP_WINDOW` (2 ms) after it | SIMULATOR §3 | V | L1 |
+| SIM-15 | The connect frame locks the panel; the close frame or `unplug` unlocks it; `state` shows `locked` | SIMULATOR §3 | V | L1 |

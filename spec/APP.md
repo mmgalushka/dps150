@@ -8,14 +8,14 @@ Sources (see PROTOCOL.md §4 and §6):
 
 | UI element | Wire source |
 |---|---|
-| Measured V, I, P | `C3` (3 floats V, I, P; order [U]); offsets 12/16/20 of the `FF` dump |
+| Measured V, I, P | `C3` (3 floats V, I, P; order [V]); offsets 12/16/20 of the `FF` dump |
 | Set V, set I | `C1`, `C2` |
 | Input voltage | `C0` |
 | Temperature | `C4` |
 | Capacity, energy | `D9`, `DA` |
-| Output ON/OFF | `DB` (write [U]) |
-| Protection state | `DC` (mapping [U]) |
-| Mode CV/CC | `DD` (1 = CV, 0 = CC [U]) |
+| Output ON/OFF | `DB` (read and write [V]) |
+| Protection state | `DC` (mapping [V]) |
+| Mode CV/CC | `DD` (1 = CV, 0 = CC [V]) |
 | Live max V / I | `E2`, `E3` |
 | OVP/OCP/OPP/OTP/LVP limits | `D1`..`D5` |
 | Limit device ranges | `E4`..`E8` |
@@ -99,12 +99,12 @@ Every value that depends on device behaviour nobody has observed lives in one mo
 
 | Constant | Assumed value | Verify (PROTOCOL.md §8) |
 |---|---|---|
-| `OUTPUT_ON` / `OUTPUT_OFF` written to `DB` | `01` / `00` | Output enable |
-| `MODE_CV` / `MODE_CC` read from `DD` | `1` / `0` | `DD` mapping |
-| `C3` field order | V, I, P | `C3` real values |
-| Protection codes read from `DC` | `0` none, `1` OVP, `2` OCP, `3` OPP, `4` OTP, `5` LVP | Protection trip |
-| Clearing a trip | write `DB = 00`, then re-read `DC` | Protection trip |
-| `LIMIT_MARGIN` | one resolution step: 10 mV, 1 mA, 0.1 W; equality allowed at a limit's device maximum | Trip at equality (SAFETY.md §1) |
-| Brightness / volume slider range | placeholder 5 steps | Ranges of `D6`, `D7` |
+| `OUTPUT_ON` / `OUTPUT_OFF` written to `DB` | `01` / `00` | Verified 2026-11-02 |
+| `MODE_CV` / `MODE_CC` read from `DD` | `1` / `0` | Verified 2026-11-02 |
+| `C3` field order | V, I, P | Verified 2026-11-02 |
+| Protection codes read from `DC` | `0` none, `1` OVP, `2` OCP, `3` OPP, `4` OTP, `5` LVP | Verified 2026-11-02 |
+| Clearing a trip | write `DB = 01` (clears **and** turns the output on; `DB = 00` does not clear), then re-read `DC`. LVP clears by itself | Verified 2026-11-02; SAFETY.md §3.3 |
+| `LIMIT_MARGIN` | one resolution step: 10 mV, 1 mA, 0.1 W; equality allowed at a limit's device maximum | The device does not trip at equality (verified 2026-11-02), so the margin is host policy, not a device need |
+| Brightness / volume slider range | placeholder 5 steps | The register keeps 0..15 (PROTOCOL.md §4); the panel's own range is not known |
 
-Timing constants (not device-dependent): `MISSED_TICKS` 3, `HANDSHAKE_TIMEOUT` 3 s (retry at 1.5 s), `RECONNECT_INTERVAL` 1 s, `STALE_FRAME` 200 ms, `SET_COALESCE` 50 ms, `QUIT_READBACK` 500 ms.
+Timing constants (not device-dependent): `MISSED_TICKS` 3, `HANDSHAKE_TIMEOUT` 3 s (retry at 1.5 s), `RECONNECT_INTERVAL` 1 s, `STALE_FRAME` 200 ms, `SET_COALESCE` 50 ms, `SET_GAP` 100 ms (nothing is sent for this long after any SET or after the connect or close frame, polling included; PROTOCOL.md §7.7; a SET followed sooner by another frame is lost), `QUIT_READBACK` 500 ms.

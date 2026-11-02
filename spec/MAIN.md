@@ -72,7 +72,7 @@ Rust workspace, layered (directory layout: [DEVOPS.md](../DEVOPS.md) §2.1):
 
 ## 8. Open questions
 Product and design questions are all decided (§9). What remains is unverified device behaviour and pending review of design proposals:
-- **Unverified device behaviour** (needs a safe resistive load): output enable, protection trip mapping and clearing, persistence across power cycles. Tracked in PROTOCOL.md §8; the app implements these behind named constants (DESIGN.md §0).
+- **Unverified device behaviour**: output enable, trips, persistence and the cable pull were verified in H1 Part B (2026-11-02). What remains is listed in PROTOCOL.md §8 (flags `D8`/`E1`, panel ranges, the 2.8 V meter reading).
 - **Design proposals not yet reviewed**: none; no `[P]` item remains in the specification.
 - **Simulator flag.** The simulator is a separate binary that prints a pty path (DEVOPS.md §4); `dps150` has no simulator mode.
 - Later reviews (crates.io, apt repository, Windows, non-interactive CLI): see §1 non-goals and DEVOPS.md §9.
@@ -105,3 +105,8 @@ Baseline 2026-10-30. Earlier entries (including superseded and withdrawn ones) a
 | 2026-10-30 | Hardware session with a resistive load comes right after the `protocol` crate, before the simulator and any output code (PLAN.md §3) | Nobody has seen the output switch; finding wrong assumptions early avoids building safety logic and tests on them |
 | 2026-10-30 | Delivery in safety stages (read-only monitor, setpoints and limits, output control, completion), each run on the real unit; the first public release is complete v1.0.0 (PLAN.md) | Code that can write to the device does not exist until the read path is proven; no partial tool is published |
 | 2026-11-01 | H1 Part A: `LNK-01` stays at 3 missed ticks; the simulator pushes one frame every 125 ms, not 200 ms (SIM-05) | Measured on the unit, directly and through the bridge: about 8 push frames/s; about 4 % of replies take 90 to 125 ms, worst gap 225 ms and longest missed run 1 in 60 s (PROTOCOL.md §5) |
+| 2026-11-02 | H1 Part B: after every SET the app sends nothing for `SET_GAP` (100 ms), polling included (SAF-15); the simulator drops a SET followed too soon by another frame (SIM-14) | On the unit a SET followed immediately by a GET was lost 8 of 9 times; with 5 ms or more of quiet it never was (PROTOCOL.md §7.7) |
+| 2026-11-02 | Clearing a trip is turning the output ON: same ordering rules and ON confirmation, `DB = 01` only for a deliberate ON, never `DB = 00` to clear, no automatic retry (SAF-13). LVP is not latched | A host `DB = 01` (like the panel button) clears the latched trip and energizes the output in one step; there is no clear-without-ON (PROTOCOL.md §7.9) |
+| 2026-11-02 | On normal quit the app sends the session close frame after the quit output-off and its read-back (SAF-14) | The connect frame locks the front panel until the close frame or a cable pull (PROTOCOL.md §7.8) |
+| 2026-11-02 | A pulled data cable leaves the output ON and releases the panel lock; `LNK` wording changed from "most likely" to verified; the simulator `unplug` keeps the output state | Verified on the unit with a 10 Ω load (PROTOCOL.md §7.10) |
+| 2026-11-02 | `LIMIT_MARGIN` stays as a host policy although the device does not trip at equality | Verified: OVP equal to the output voltage did not trip (strict comparison) |
