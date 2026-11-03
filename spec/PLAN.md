@@ -129,6 +129,7 @@ Built in two parts, like M5.
 - `q` and its prompt, Settings → On exit, the 500 ms read-back, the stdout line, exit status 1 when OFF cannot be confirmed, `SIGTERM` and `SIGHUP` following the setting, and the close frame `F1 C1 00 01 00 01` after the last write and one `SET_GAP`.
 - Requirements: SAF-11, SAF-14.
 - *Exit:* the stage 3 gate, with the user at the unit and the H1 load: confirm, jump guard, one real trip, a cable pull with queued OFF, each quit path.
+- **Status:** built 2026-11-03 on branch `m6b/quit-and-close`: `q` with its two prompts, On exit, the 500 ms read-back, the close frame after the last write and one `SET_GAP`, the exit line printed last, status 1, `SIGTERM`/`SIGHUP`/`SIGINT`. 55 level 2 tests. **Open: the stage 3 gate** (on the unit, with the 10 Ω load) is a manual step for the user.
 
 ### M7. Completion (stage 4)
 - Settings and Help screens, config writing, colour modes, secondary-screen stretching, the remaining goldens, the size sweep.

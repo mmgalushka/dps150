@@ -13,3 +13,11 @@ pub const NOTICE_DURATION: Duration = Duration::from_secs(3);
 
 /// Longest typed entry (DESIGN.md §7.2).
 pub const ENTRY_MAX_CHARS: usize = 5;
+
+/// How long a quit that turns the output off waits for the `DB` read-back
+/// (SAF-11).
+pub const QUIT_READBACK: Duration = Duration::from_millis(500);
+
+/// A quit that cannot finish closing the session gives up after this long, so
+/// the program always exits.
+pub const CLOSE_TIMEOUT: Duration = Duration::from_millis(1500);

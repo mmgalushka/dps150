@@ -7,8 +7,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use app::{Effect, Key, Model, PortInfo};
-use device::{Command, Device, LinkConfig};
+use app::{Action, Effect, Key, Model, Outcome, PortInfo, Shutdown};
+use device::{Command, Device, LinkConfig, Message};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::cursor::{Hide, Show};
@@ -30,7 +30,7 @@ fn main() -> ExitCode {
         Err(error) => error.exit(),
     };
     match run(&cli) {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(status) => ExitCode::from(status),
         Err(message) => {
             eprintln!("{message}");
             ExitCode::from(1)
@@ -42,7 +42,9 @@ fn env(name: &str) -> Option<String> {
     std::env::var(name).ok()
 }
 
-fn run(cli: &app::Cli) -> Result<(), String> {
+/// Returns the exit status: 0, or 1 when the output could not be confirmed
+/// OFF (SAF-11).
+fn run(cli: &app::Cli) -> Result<u8, String> {
     // Everything that can fail runs before the alternate screen (APP-01,
     // UI-10): there is no start screen.
     if !app::locale::is_utf8(
@@ -97,21 +99,53 @@ fn run(cli: &app::Cli) -> Result<(), String> {
     }
 
     let stop = Arc::new(AtomicBool::new(false));
-    for signal in [signal_hook::consts::SIGTERM, signal_hook::consts::SIGHUP] {
+    for signal in [
+        signal_hook::consts::SIGTERM,
+        signal_hook::consts::SIGHUP,
+        signal_hook::consts::SIGINT,
+    ] {
         signal_hook::flag::register(signal, Arc::clone(&stop))
             .map_err(|e| format!("dps150: cannot handle signals: {e}"))?;
     }
 
     let mut terminal = TerminalGuard::enter().map_err(|e| format!("dps150: terminal: {e}"))?;
-    event_loop(
+    let outcome = event_loop(
         &mut terminal,
         &mut model,
         &device,
         theme,
         &stop,
         names_file.as_deref(),
-    )
-    .map_err(|e| format!("dps150: {e}"))
+    );
+    // Leave the alternate screen first: the line below is the last thing
+    // written (SAF-11).
+    drop(terminal);
+    let outcome = outcome.map_err(|e| format!("dps150: {e}"))?;
+    if let Some(line) = &outcome.line {
+        println!("{line}");
+    }
+    Ok(outcome.status)
+}
+
+/// Starts the quit sequence and sends its first actions (SAF-11, SAF-14).
+fn begin_shutdown(
+    model: &Model,
+    device: &Device,
+    now: std::time::Duration,
+    force_off: bool,
+) -> Shutdown {
+    let (shutdown, actions) = model.begin_shutdown(now, force_off);
+    run_actions(device, actions);
+    shutdown
+}
+
+fn run_actions(device: &Device, actions: Vec<Action>) {
+    for action in actions {
+        match action {
+            Action::Write(write) => device.send(Command::Write(write)),
+            Action::Close => device.send(Command::Close),
+        }
+    }
 }
 
 fn event_loop(
@@ -121,27 +155,42 @@ fn event_loop(
     theme: ui::Theme,
     stop: &AtomicBool,
     names_file: Option<&std::path::Path>,
-) -> io::Result<()> {
+) -> io::Result<Outcome> {
     let begin = Instant::now();
     let mut last_draw = begin;
     let mut dirty = true;
+    // Once a quit has started, the sequence runs while the screen stays up.
+    let mut shutdown: Option<Shutdown> = None;
     loop {
+        let now = begin.elapsed();
         let before = model.clone();
-        model.tick(begin.elapsed());
+        model.tick(now);
         if *model != before {
             dirty = true;
         }
-        if stop.load(Ordering::Relaxed) {
-            return Ok(());
+        // `SIGTERM`, `SIGHUP`, `SIGINT`: quit without a prompt, by the On exit
+        // setting (SAF-11).
+        if stop.load(Ordering::Relaxed) && shutdown.is_none() {
+            shutdown = Some(begin_shutdown(model, device, now, false));
         }
         while let Ok(message) = device.messages().try_recv() {
+            if let (Some(sequence), Message::Event(event)) = (shutdown.as_mut(), &message) {
+                run_actions(device, sequence.event(now, event));
+            }
             model.apply(message);
             dirty = true;
         }
-        // Writes no key caused, such as the OFF queued during a link loss,
-        // go out first after a reconnect (LNK-04).
-        for write in model.drain_writes() {
-            device.send(Command::Write(write));
+        if let Some(sequence) = shutdown.as_mut() {
+            run_actions(device, sequence.tick(now));
+            if let Some(outcome) = sequence.finished() {
+                return Ok(outcome.clone());
+            }
+        } else {
+            // Writes no key caused, such as the OFF queued during a link loss,
+            // go out first after a reconnect (LNK-04).
+            for write in model.drain_writes() {
+                device.send(Command::Write(write));
+            }
         }
         // Below the floor only OFF and Ctrl-C work, and nothing pending
         // survives (SAF-09, SAF-10).
@@ -153,18 +202,31 @@ fn event_loop(
                 Event::Key(key) if key.kind != KeyEventKind::Release => {
                     if let Some(key) = map_key(key) {
                         dirty = true;
-                        let effect = model.on_key(key);
-                        save_names_if_changed(model, names_file);
-                        match effect {
-                            Effect::Quit => return Ok(()),
-                            Effect::Reconnect => device.send(Command::Reconnect),
-                            Effect::Write(write) => device.send(Command::Write(write)),
-                            Effect::Writes(writes) => {
-                                for write in writes {
-                                    device.send(Command::Write(write));
-                                }
+                        if let Some(sequence) = shutdown.as_mut() {
+                            // Only a second Ctrl-C does anything while quitting:
+                            // it stops the wait.
+                            if key == Key::CtrlC {
+                                sequence.abort();
                             }
-                            Effect::None => {}
+                        } else {
+                            let effect = model.on_key(key);
+                            save_names_if_changed(model, names_file);
+                            match effect {
+                                Effect::Quit => {
+                                    shutdown = Some(begin_shutdown(model, device, now, false));
+                                }
+                                Effect::QuitOff => {
+                                    shutdown = Some(begin_shutdown(model, device, now, true));
+                                }
+                                Effect::Reconnect => device.send(Command::Reconnect),
+                                Effect::Write(write) => device.send(Command::Write(write)),
+                                Effect::Writes(writes) => {
+                                    for write in writes {
+                                        device.send(Command::Write(write));
+                                    }
+                                }
+                                Effect::None => {}
+                            }
                         }
                     }
                 }
@@ -172,6 +234,9 @@ fn event_loop(
                 Event::Resize(..) => dirty = true,
                 _ => {}
             }
+        }
+        if let Some(outcome) = shutdown.as_ref().and_then(Shutdown::finished) {
+            return Ok(outcome.clone());
         }
         if dirty || last_draw.elapsed() >= REDRAW {
             terminal

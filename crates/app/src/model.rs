@@ -53,7 +53,10 @@ pub enum Key {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Effect {
     None,
+    /// Quit by the rules of Settings → On exit (SAF-11).
     Quit,
+    /// Turn the output off, then quit (`o` at the quit prompt).
+    QuitOff,
     /// One reconnect attempt (`r`, Reconnect = off).
     Reconnect,
     /// Send this write to the device thread.
@@ -259,6 +262,8 @@ impl Model {
                 self.protection.mode = crate::screens::ProtectionMode::Selecting;
             }
             Message::Event(Event::ReadBack { written, device }) => self.read_back(written, device),
+            // The close is the quit sequence's business, not the screens'.
+            Message::Event(Event::Closed) => {}
             Message::Event(Event::WriteRefused { why, .. }) => {
                 self.pending.clear();
                 match why {
@@ -495,7 +500,10 @@ impl Model {
                 self.start_chord();
                 Effect::None
             }
-            Key::Char('q') | Key::CtrlC => Effect::Quit,
+            // `Ctrl-C` quits at once; `q` asks when it would leave the output
+            // ON or cannot reach the device (SAF-11).
+            Key::CtrlC => Effect::Quit,
+            Key::Char('q') => self.request_quit(),
             Key::Tab => {
                 self.toggle_focus();
                 Effect::None

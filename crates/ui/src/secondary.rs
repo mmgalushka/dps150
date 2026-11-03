@@ -106,7 +106,7 @@ fn strip(p: &mut Painter, view: &View, area: Rect, x0: u16, width: u16, name: &s
 fn bottom_row(p: &mut Painter, model: &Model, x0: u16, y: u16, width: u16, compact: bool) {
     // A prompt or message replaces the key bar (§5.12).
     if let Some(text) = model.prompt_text(compact) {
-        draw_prompt(p, x0 + 1, y, &text);
+        draw_prompt(p, x0 + 1, y, &text, &model.prompt_keys(compact));
         return;
     }
     if let Some(line) = model.message(compact) {

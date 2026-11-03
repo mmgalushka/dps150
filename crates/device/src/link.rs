@@ -26,6 +26,8 @@ pub enum State {
     Lost,
     /// Start-up failed. Terminal: the program exits with status 1 (APP-01).
     Failed,
+    /// The session is closed (SAF-14). Terminal: nothing more is sent.
+    Closed,
 }
 
 /// Why the link went down or never came up.
@@ -60,6 +62,8 @@ pub enum Event {
     ReadBack { written: Write, device: Write },
     /// A write the core refused: a defect in the layer above (APP-12).
     WriteRefused { write: Write, why: Refusal },
+    /// The close frame is out and its quiet gap has passed (SAF-14).
+    Closed,
 }
 
 /// Why `Link::write` said no.
@@ -143,6 +147,10 @@ pub struct Link {
     retry_at: Option<Duration>,
     /// Writes waiting for their turn, one per register (the latest wins).
     pending: Vec<Write>,
+    /// The program is quitting: queued writes go out, then the close frame.
+    closing: bool,
+    /// The close frame is out; waiting out its gap.
+    close_sent: bool,
     /// Written, waiting for the next poll to read them back.
     unchecked: Vec<Write>,
     /// Riding on the poll in flight.
@@ -175,6 +183,8 @@ impl Link {
             missed: 0,
             retry_at: None,
             pending: Vec::new(),
+            closing: false,
+            close_sent: false,
             unchecked: Vec::new(),
             readback: Vec::new(),
             dump: None,
@@ -254,7 +264,11 @@ impl Link {
             this.events.push(Event::WriteRefused { write, why });
             Err(why)
         };
-        let Some(dump) = self.dump.as_ref().filter(|_| self.state == State::Online) else {
+        let Some(dump) = self
+            .dump
+            .as_ref()
+            .filter(|_| self.state == State::Online && !self.closing)
+        else {
             return refuse(self, Refusal::NotOnline);
         };
         let limit = match write {
@@ -303,6 +317,23 @@ impl Link {
     /// Writes queued and not yet on the wire.
     pub fn pending_writes(&self) -> &[Write] {
         &self.pending
+    }
+
+    /// Start closing the session: queued writes still go out, then the close
+    /// frame, then nothing (SAF-14). Polling stops. With no session open there
+    /// is nothing to close.
+    pub fn close(&mut self) {
+        match self.state {
+            State::Online | State::Handshake => self.closing = true,
+            State::Closed => {}
+            _ => self.finish_close(),
+        }
+    }
+
+    fn finish_close(&mut self) {
+        self.state = State::Closed;
+        self.pending.clear();
+        self.events.push(Event::Closed);
     }
 
     // ---- transport reports ------------------------------------------------
@@ -374,10 +405,40 @@ impl Link {
         // Lets the reader drop a stale partial frame (APP-04).
         self.reader.feed(now, &[]);
         match self.state {
+            State::Handshake if self.closing => {
+                // No session worth closing yet: just stop.
+                self.finish_close();
+                Vec::new()
+            }
             State::Handshake => self.poll_handshake(now),
+            State::Online if self.closing => self.poll_closing(now),
             State::Online => self.poll_online(now),
             _ => Vec::new(),
         }
+    }
+
+    /// Flush what is queued, wait out the gap, send the close frame, wait out
+    /// its gap, report `Closed`. No polling meanwhile.
+    fn poll_closing(&mut self, now: Duration) -> Vec<u8> {
+        let mut out = Vec::new();
+        if now < self.quiet_until {
+            return out;
+        }
+        if self.close_sent {
+            self.finish_close();
+            return out;
+        }
+        if !self.pending.is_empty() {
+            let write = self.pending.remove(0);
+            out.extend(write.to_frame().encode());
+            self.stats.sets_sent += 1;
+            self.quiet_until = now + SET_GAP;
+            return out;
+        }
+        out.extend(Frame::close().encode());
+        self.close_sent = true;
+        self.quiet_until = now + SET_GAP;
+        out
     }
 
     fn poll_handshake(&mut self, now: Duration) -> Vec<u8> {
