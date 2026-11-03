@@ -16,6 +16,8 @@ pub enum Command {
     Temp(f32),
     Trip(Protection),
     Keep(u8, f64),
+    /// The front-panel output button: `panel on` / `panel off`.
+    Panel(bool),
     Unplug,
     Plug,
     Close,
@@ -137,6 +139,12 @@ impl FromStr for Command {
                 let id = type_byte(words.next())?;
                 Self::Keep(id, number(words.next(), "value")?)
             }
+            "panel" => match words.next() {
+                Some("on") => Self::Panel(true),
+                Some("off") => Self::Panel(false),
+                Some(other) => return fail(format!("expected on or off, not {other}")),
+                None => return fail("missing on or off"),
+            },
             "unplug" => Self::Unplug,
             "plug" => Self::Plug,
             "close" => Self::Close,
@@ -184,6 +192,7 @@ impl SimDevice {
             Command::Temp(celsius) => self.set_temperature(celsius),
             Command::Trip(protection) => self.trip(protection),
             Command::Keep(id, value) => self.keep(id, value),
+            Command::Panel(on) => self.panel_output(on),
             Command::Unplug => self.unplug(),
             Command::Plug => self.plug(),
             Command::Corrupt(frames) => self.corrupt(frames),
@@ -217,6 +226,8 @@ mod tests {
         assert_eq!(parse("trip lvp"), Ok(Command::Trip(Protection::Lvp)));
         assert_eq!(parse("keep C1 3.3"), Ok(Command::Keep(0xC1, 3.3)));
         assert_eq!(parse("keep 0xd6 2"), Ok(Command::Keep(0xD6, 2.0)));
+        assert_eq!(parse("panel on"), Ok(Command::Panel(true)));
+        assert_eq!(parse("panel off"), Ok(Command::Panel(false)));
         assert_eq!(parse("unplug"), Ok(Command::Unplug));
         assert_eq!(parse("plug"), Ok(Command::Plug));
         assert_eq!(parse("close"), Ok(Command::Close));
@@ -250,6 +261,12 @@ mod tests {
         assert!(parse("keep zz 1").unwrap_err().contains("hex byte"));
         assert!(parse("corrupt -1").unwrap_err().contains("whole number"));
         assert!(parse("state now").unwrap_err().contains("unexpected"));
+        assert!(parse("panel").unwrap_err().contains("missing on or off"));
+        assert!(
+            parse("panel maybe")
+                .unwrap_err()
+                .contains("expected on or off")
+        );
         assert!(parse("dance").unwrap_err().contains("unknown command"));
     }
 }

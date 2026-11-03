@@ -6,5 +6,6 @@ pub mod constants;
 mod link;
 mod transport;
 
-pub use link::{Cause, Event, Link, LinkConfig, LinkStats, OpenError, Snapshot, State};
+pub use link::{Cause, Event, Link, LinkConfig, LinkStats, OpenError, Refusal, Snapshot, State};
+pub use protocol::Write;
 pub use transport::{Command, Device, Message, StartupError};

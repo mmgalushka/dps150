@@ -664,6 +664,7 @@ Screen names (strip): `PRESETS`, `PROTECTION`, `SETTINGS`. Box titles: `VOLTAGE`
 | Rejected: above live maximum (I) | `35.00 A is above the live maximum 5.10 A` | `35.00 A > 5.10 A live max` |  | 40 / 25 |
 | Rejected: not below OVP | `35.00 V is not below OVP 13.00 V. Change OVP on the Protection screen (o)` | `35.00 V: not below OVP 13.00 V` |  | 73 / 30 |
 | Rejected: not below OCP | `35.00 A is not below OCP 1.20 A. Change OCP on the Protection screen (o)` | `35.00 A: not below OCP 1.20 A` |  | 72 / 29 |
+| Rejected: not below OPP **[P]** | `150.0 W is not below OPP 100.0 W. Change OPP on the Protection screen (o)` | `150.0 W: not below OPP 100.0 W` |  | 72 / 31 |
 | Cannot turn ON (ordering) | `Cannot turn ON: set voltage is not below OVP (o)` | `ON blocked: V not below OVP` |  | 48 / 27 |
 | Step at live maximum | `At live maximum 20.05 V` | = |  | 23 / 23 |
 | Step at minimum | `At minimum 0.00 V` | = |  | 17 / 17 |

@@ -2,7 +2,7 @@
 //! compares characters with the files in `tests/golden/` (UI-02). Colour is
 //! not compared here.
 
-use app::Model;
+use app::{Key, Model};
 use device::{Cause, Event, Message, Snapshot};
 use protocol::value::{MilliCelsius, Milliamps, Millivolts, Milliwatts};
 use protocol::{Dump, Mode, OutputReading, Preset};
@@ -140,6 +140,112 @@ fn check(name: &str, model: &Model, cols: u16, rows_: u16) {
         want.len() <= got.len(),
         "{name}: the file has more rows than the screen"
     );
+}
+
+/// Types `text` on the voltage readout, as the keys would.
+fn typing(mut model: Model, text: &str, apply: bool) -> Model {
+    model.on_key(Key::Enter);
+    for c in text.chars() {
+        model.on_key(Key::Char(c));
+    }
+    if apply {
+        model.on_key(Key::Enter);
+    }
+    model
+}
+
+#[test]
+fn ui_02_main_standard_entry() {
+    let model = typing(model_with(example_dump(), PORT), "12.5", false);
+    check("main-standard-entry", &model, 80, 24);
+}
+
+#[test]
+fn ui_02_main_standard_reject() {
+    let model = typing(model_with(example_dump(), PORT), "35", true);
+    check("main-standard-reject", &model, 80, 24);
+}
+
+#[test]
+fn ui_02_main_compact_entry() {
+    let model = typing(model_with(example_dump(), PORT), "12.5", false);
+    check("main-compact-entry", &model, 44, 16);
+}
+
+#[test]
+fn ui_05_a_rejected_entry_turns_its_text_red_and_the_message_is_an_error() {
+    let model = typing(model_with(example_dump(), PORT), "35", true);
+    let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
+    render(&model, &mut buf, Theme::new(Depth::TrueColor));
+    let (x, y) = find(&buf, "35 V is above");
+    assert_eq!(buf[(x, y)].fg, rgb(0xff5c7a), "message in er");
+    let set = find(&buf, "SET  ←→");
+    assert_eq!(
+        buf[(set.0 + 3, set.1 + 2)].fg,
+        rgb(0xff5c7a),
+        "typed digits in er"
+    );
+    // A normal entry stays gold.
+    let model = typing(model_with(example_dump(), PORT), "12.5", false);
+    let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
+    render(&model, &mut buf, Theme::new(Depth::TrueColor));
+    let set = find(&buf, "SET  ←→");
+    assert_eq!(buf[(set.0 + 3, set.1 + 2)].fg, rgb(0xf6c177));
+}
+
+#[test]
+fn ui_08_while_typing_the_key_bar_offers_apply_cancel_and_off_and_no_help() {
+    let model = typing(model_with(example_dump(), PORT), "5", false);
+    for (cols_, rows_) in [(44, 16), (80, 24), (120, 40)] {
+        let last = draw(&model, cols_, rows_);
+        let bar = last
+            .iter()
+            .rev()
+            .find(|l| l.contains("Esc  cancel"))
+            .expect("a key bar");
+        assert!(
+            bar.contains("Esc  cancel") && bar.contains("Space  off"),
+            "{bar}"
+        );
+        assert!(!bar.contains("help"), "{cols_}x{rows_}: {bar}");
+    }
+}
+
+#[test]
+fn edt_04_a_pending_edit_shows_before_the_device_confirms_it() {
+    // Output OFF, so the edit is sent; the screen shows the new set value.
+    let mut dump = example_dump();
+    dump.output_on = false;
+    let mut model = model_with(dump, PORT);
+    model.on_key(Key::Up); // +1 V on the units digit
+    let lines = draw(&model, 80, 24);
+    // 05.00 has `┗━┓` under its 5; 06.00 has `┣━┓` under its 6.
+    assert!(
+        lines.iter().any(|l| l.contains("┃ ┃ ┣━┓")),
+        "06.00 in big digits"
+    );
+}
+
+#[test]
+fn lim_07_the_live_maximum_warning_shows_in_the_message_line() {
+    let mut dump = example_dump();
+    dump.set_voltage = Millivolts::new(20_000);
+    dump.max_voltage = Millivolts::new(18_400);
+    let model = model_with(dump, PORT);
+    let lines = draw(&model, 80, 24);
+    assert!(lines.iter().any(|l| {
+        l.contains("Set 20.00 V is above the live maximum 18.40 V. Lower it to turn output ON")
+    }));
+    let lines = draw(&model, 44, 16);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("V 20.00 above live max 18.40"))
+    );
+    // Link loss takes the line over (LNK-02).
+    let lines = draw(&lost(model), 80, 24);
+    assert!(lines.iter().any(|l| l.contains("Output state unknown")));
+    assert!(!lines.iter().any(|l| l.contains("above the live maximum")));
 }
 
 #[test]
