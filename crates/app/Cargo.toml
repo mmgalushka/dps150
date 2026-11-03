@@ -8,3 +8,7 @@ publish = false
 
 [dependencies]
 device.workspace = true
+protocol.workspace = true
+clap = { version = "4.6.7", default-features = false, features = ["std", "help", "usage", "error-context"] }
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.8"
