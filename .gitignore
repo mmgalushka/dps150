@@ -40,6 +40,8 @@
 !/crates/*/src/bin/*.rs
 !/crates/*/tests/
 !/crates/*/tests/*.rs
+!/crates/*/tests/*/
+!/crates/*/tests/*/*.rs
 !/crates/*/examples/
 !/crates/*/examples/*.rs
 !/tests/*.rs
