@@ -57,6 +57,10 @@ pub(crate) struct View {
     pub(crate) entry: Option<(Focus, String, bool)>,
     /// The message line: a notice, a hint or the live-maximum warning.
     pub(crate) message: Option<(String, Tone)>,
+    /// A question waiting for `y` or `n` (§5.12).
+    pub(crate) prompt: Option<String>,
+    /// The protection that tripped, as its name (`OTP`).
+    pub(crate) trip: Option<&'static str>,
     pub(crate) focus: Focus,
     pub(crate) cursors: [usize; 2],
 }
@@ -117,6 +121,8 @@ impl View {
                 .entry()
                 .map(|entry| (entry.focus, entry.text.clone(), entry.rejected)),
             message: model.message(compact).map(|line| (line.text, line.tone)),
+            prompt: model.prompt_text(compact),
+            trip: model.tripped().filter(|_| online).map(|limit| limit.name()),
             focus: model.focus,
             cursors: [model.cursor(Focus::Voltage), model.cursor(Focus::Current)],
         }
@@ -347,6 +353,32 @@ pub(crate) fn message_style(tone: Tone) -> S {
     }
 }
 
+/// The question and its answers (§5.12): `Turn output ON at …?   y  yes   Esc  no`.
+pub(crate) fn draw_prompt(p: &mut Painter, x: u16, y: u16, text: &str) {
+    let column = p.text(x, y, &format!("{text}  "), S::Wn);
+    draw_key_items(p, column, y, &[("y", "yes"), ("Esc", "no")]);
+}
+
+/// The tripped message (§6.7): `OTP tripped  output forced off ·  Space  clear`,
+/// shorter in Compact.
+fn draw_trip(p: &mut Painter, x: u16, y: u16, name: &str, compact: bool) {
+    let (tail, cap_tail) = if compact {
+        (" · output off · ", " clear")
+    } else {
+        ("  output forced off · ", " clear")
+    };
+    p.spans(
+        x,
+        y,
+        &[
+            (&format!("{name} tripped"), S::Er),
+            (tail, S::D),
+            (" Space ", S::K),
+            (cap_tail, S::D),
+        ],
+    );
+}
+
 fn draw_spans(p: &mut Painter, x: u16, y: u16, spans: &[(String, S)]) -> u16 {
     spans
         .iter()
@@ -394,11 +426,16 @@ fn compact(p: &mut Painter, view: &View, area: Rect) {
 
     // Info row.
     let info_y = y0 + 12;
-    // A transient message replaces the standing text for its three seconds.
-    if let Some((text, tone)) = &view.message {
+    // A question comes first, then a transient message, which replaces the
+    // standing text for its three seconds.
+    if let Some(prompt) = &view.prompt {
+        draw_prompt(p, x0 + 1, info_y, prompt);
+    } else if let Some((text, tone)) = &view.message {
         p.text(x0 + 1, info_y, text, message_style(*tone));
     } else if !view.online {
         draw_spans(p, x0 + 1, info_y, &lost_spans(view, true));
+    } else if let Some(name) = view.trip {
+        draw_trip(p, x0 + 1, info_y, name, true);
     } else if let (Some(vin), Some(temp), Some(energy)) = (view.vin, view.temperature, view.energy)
     {
         p.spans(
@@ -624,13 +661,22 @@ fn fluid_status(p: &mut Painter, view: &View, rect: Rect, tier: Tier) {
         p.spans(column, y1, &[("    ", S::Page), ("all clear", S::Ok)]);
     }
 
-    // Line 2. A transient message replaces the standing text (§5.12).
+    // Line 2. A question comes first; a transient message replaces the
+    // standing text (§5.12).
+    if let Some(prompt) = &view.prompt {
+        draw_prompt(p, x, y2, prompt);
+        return;
+    }
     if let Some((text, tone)) = &view.message {
         p.text(x, y2, text, message_style(*tone));
         return;
     }
     if !view.online {
         draw_spans(p, x, y2, &lost_spans(view, false));
+        return;
+    }
+    if let Some(name) = view.trip {
+        draw_trip(p, x, y2, name, false);
         return;
     }
     let extra = usize::from(rect.width).saturating_sub(if large { 100 } else { 80 });

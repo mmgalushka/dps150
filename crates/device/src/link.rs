@@ -69,6 +69,9 @@ pub enum Refusal {
     NotOnline,
     /// Outside the device range (APP-12).
     OutOfRange,
+    /// An ON while an OFF is queued or not yet read back: the core never
+    /// puts an ON behind an OFF the user asked for (SAF-01).
+    OffPending,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -262,13 +265,38 @@ impl Link {
             Write::Opp(_) => dump.opp_range.get(),
             Write::Otp(_) => dump.otp_range.get(),
             Write::Lvp(_) => dump.lvp_range.get(),
+            Write::Output(_) => u32::MAX,
         };
         if write.thousandths() > limit {
             return refuse(self, Refusal::OutOfRange);
         }
-        self.pending
-            .retain(|queued| queued.register() != write.register());
-        self.pending.push(write);
+        match write {
+            // An OFF goes first, past any queued setpoint, and is never
+            // merged away or dropped (APP-09). A queued ON is void.
+            Write::Output(false) => {
+                self.pending
+                    .retain(|queued| queued.register() != write.register());
+                self.pending.insert(0, write);
+            }
+            Write::Output(true) => {
+                let off_waiting = [&self.pending, &self.unchecked, &self.readback]
+                    .into_iter()
+                    .any(|list| list.contains(&Write::Output(false)));
+                if off_waiting {
+                    return refuse(self, Refusal::OffPending);
+                }
+                self.pending
+                    .retain(|queued| queued.register() != write.register());
+                // Behind every setpoint already queued, so the ON happens at
+                // the values the user saw.
+                self.pending.push(write);
+            }
+            _ => {
+                self.pending
+                    .retain(|queued| queued.register() != write.register());
+                self.pending.push(write);
+            }
+        }
         Ok(())
     }
 
@@ -526,5 +554,6 @@ fn device_value(dump: &Dump, written: Write) -> Write {
         Write::Opp(_) => Write::Opp(dump.opp),
         Write::Otp(_) => Write::Otp(dump.otp),
         Write::Lvp(_) => Write::Lvp(dump.lvp),
+        Write::Output(_) => Write::Output(dump.output_on),
     }
 }

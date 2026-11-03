@@ -83,6 +83,7 @@ fn run(cli: &app::Cli) -> Result<(), String> {
         env("TERM").as_deref(),
     ));
     let mut model = Model::new(port, config.reconnect);
+    model.set_safety(config.safety());
     let names_file = app::names_path(env("XDG_CONFIG_HOME").as_deref(), env("HOME").as_deref());
     let names = app::load_names(names_file.as_deref());
     model.set_names(names.names, names.writable);
@@ -136,6 +137,16 @@ fn event_loop(
         while let Ok(message) = device.messages().try_recv() {
             model.apply(message);
             dirty = true;
+        }
+        // Writes no key caused, such as the OFF queued during a link loss,
+        // go out first after a reconnect (LNK-04).
+        for write in model.drain_writes() {
+            device.send(Command::Write(write));
+        }
+        // Below the floor only OFF and Ctrl-C work, and nothing pending
+        // survives (SAF-09, SAF-10).
+        if let Ok((cols, rows)) = ratatui::crossterm::terminal::size() {
+            model.set_too_small(ui::Tier::select(cols, rows) == ui::Tier::TooSmall);
         }
         if event::poll(FRAME)? {
             match event::read()? {

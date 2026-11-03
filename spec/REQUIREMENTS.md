@@ -91,7 +91,7 @@ Status: baseline, 2026-10-30. The index that connects the specification to tests
 | PRE-03 | Slot names are stored by the app in `presets.toml`, at most 9 characters | DESIGN §8.1, APP §4.2 | D | L1 |
 | PRE-04 | Rename is an inline text field: `⏎` saves, `Esc` cancels, `Space` types a space | DESIGN §8.1 | D | L1 |
 | PRO-01 | A tripped protection shows the header label, the tripped lamp, output OFF and the `NAME tripped` message. Which lamp and the value at trip depend on the unverified `DC` mapping | DESIGN §6.7 | D, U | L3 M |
-| PRO-02 | `Space` in the tripped state sends output-off and re-reads the protection state; if still tripped show `Still tripped` | DESIGN §6.7 | D, U | L1 M |
+| PRO-02 | *Withdrawn 2026-11-03, superseded by SAF-13.* Was: `Space` in the tripped state sends output-off and re-reads the protection state. H1 showed that `DB = 00` does not clear a trip and `DB = 01` clears it and turns the output on (PROTOCOL.md §7.9), so `Space` now offers `Clear {trip} and turn output ON…?` | DESIGN §6.7, SAFETY §3.3 | withdrawn | — |
 
 ## 8. Configuration (CFG)
 

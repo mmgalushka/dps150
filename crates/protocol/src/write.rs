@@ -1,6 +1,6 @@
-//! The writes the app may send (PROTOCOL.md §4): setpoints, preset slots and
-//! protection limits. There is deliberately no variant for the output switch,
-//! brightness or volume; those arrive with their own milestones (PLAN.md §3).
+//! The writes the app may send (PROTOCOL.md §4): setpoints, preset slots,
+//! protection limits and the output switch. There is deliberately no variant
+//! for brightness or volume; those arrive with their own milestone (PLAN.md §3).
 //! Values are the integer types of [`crate::value`], so a negative or
 //! non-finite number cannot be built (LIM-01, PRT-04).
 
@@ -19,6 +19,8 @@ pub enum Write {
     Opp(Milliwatts),
     Otp(MilliCelsius),
     Lvp(Millivolts),
+    /// The output switch, register `DB`: `01` on, `00` off [V 2026-11-02].
+    Output(bool),
 }
 
 impl Write {
@@ -34,6 +36,7 @@ impl Write {
             Self::Opp(_) => Register::Opp,
             Self::Otp(_) => Register::Otp,
             Self::Lvp(_) => Register::Lvp,
+            Self::Output(_) => Register::OutputState,
         }
     }
 
@@ -46,11 +49,23 @@ impl Write {
             Self::SetCurrent(a) | Self::PresetCurrent(_, a) | Self::Ocp(a) => a.get(),
             Self::Opp(w) => w.get(),
             Self::Otp(t) => t.get(),
+            // 1.000 for on, so an on and an off differ at any resolution.
+            Self::Output(on) => u32::from(on) * 1000,
         }
     }
 
     /// The SET frame: `F1 B1 <type> 04 <f32 LE> <cksum>`.
     pub fn to_frame(self) -> Frame {
+        if let Self::Output(on) = self {
+            // One data byte: `F1 B1 DB 01 01 DD` on, `... 00 DC` off.
+            return Frame::new(
+                Dir::HostToDevice,
+                command::SET,
+                self.register().id(),
+                [u8::from(on)],
+            )
+            .expect("one byte fits");
+        }
         let wire = match self {
             Self::SetVoltage(v) | Self::PresetVoltage(_, v) | Self::Ovp(v) | Self::Lvp(v) => {
                 v.to_wire()
@@ -58,6 +73,7 @@ impl Write {
             Self::SetCurrent(a) | Self::PresetCurrent(_, a) | Self::Ocp(a) => a.to_wire(),
             Self::Opp(w) => w.to_wire(),
             Self::Otp(t) => t.to_wire(),
+            Self::Output(_) => unreachable!("handled above"),
         };
         Frame::new(
             Dir::HostToDevice,
@@ -75,6 +91,7 @@ impl Write {
             Self::SetVoltage(_) | Self::PresetVoltage(..) | Self::Ovp(_) | Self::Lvp(_) => 10,
             Self::SetCurrent(_) | Self::PresetCurrent(..) | Self::Ocp(_) => 1,
             Self::Opp(_) | Self::Otp(_) => 100,
+            Self::Output(_) => 1,
         }
     }
 
@@ -96,6 +113,7 @@ impl Write {
             Self::Opp(_) => Self::Opp(Milliwatts::new(thousandths)),
             Self::Otp(_) => Self::Otp(MilliCelsius::new(thousandths)),
             Self::Lvp(_) => Self::Lvp(Millivolts::new(thousandths)),
+            Self::Output(_) => Self::Output(thousandths != 0),
         }
     }
 }
@@ -112,6 +130,27 @@ mod tests {
             frame.encode(),
             [0xF1, 0xB1, 0xC1, 0x04, 0x00, 0x00, 0xA0, 0x40, 0xA5]
         );
+    }
+
+    #[test]
+    fn saf_04_the_output_frames_are_the_ones_verified_on_the_unit() {
+        // PROTOCOL.md §4: ON `F1 B1 DB 01 01 DD`, OFF `F1 B1 DB 01 00 DC`.
+        assert_eq!(
+            Write::Output(true).to_frame().encode(),
+            [0xF1, 0xB1, 0xDB, 0x01, 0x01, 0xDD]
+        );
+        assert_eq!(
+            Write::Output(false).to_frame().encode(),
+            [0xF1, 0xB1, 0xDB, 0x01, 0x00, 0xDC]
+        );
+        assert_eq!(Write::Output(true).register(), Register::OutputState);
+    }
+
+    #[test]
+    fn prt_03_an_output_that_reads_back_the_other_way_is_a_difference() {
+        assert!(Write::Output(false).differs_from(Write::Output(true)));
+        assert!(Write::Output(true).differs_from(Write::Output(false)));
+        assert!(!Write::Output(true).differs_from(Write::Output(true)));
     }
 
     #[test]

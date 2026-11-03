@@ -237,3 +237,132 @@ fn prt_04_the_value_on_the_wire_is_the_value_read_back_into_the_model() {
     assert_eq!(dump.set_voltage.get(), 12_340);
     assert_eq!(dump.set_current.get(), 2_345);
 }
+
+// ---- the output switch (M6) -----------------------------------------------------
+
+fn on() -> Write {
+    Write::Output(true)
+}
+
+fn off() -> Write {
+    Write::Output(false)
+}
+
+#[test]
+fn saf_01_the_core_sends_the_output_frames_and_reads_the_state_back() {
+    let mut rig = Rig::online();
+    rig.link.write(on()).unwrap();
+    rig.run(secs(1));
+    assert!(rig.sim.is_output_on());
+    assert_eq!(readbacks(&rig), [(on(), on())]);
+    assert!(rig.link.snapshot().unwrap().dump.output_on);
+    rig.events.clear();
+    rig.link.write(off()).unwrap();
+    rig.run(secs(1));
+    assert!(!rig.sim.is_output_on());
+    assert_eq!(readbacks(&rig), [(off(), off())]);
+    assert_eq!(rig.sim.dropped(), 0);
+}
+
+#[test]
+fn app_09_an_off_goes_before_every_queued_setpoint() {
+    let mut rig = Rig::online();
+    rig.sim.panel_output(true);
+    rig.run(secs(1));
+    for write in [volts(5000), amps(1000), Write::Ovp(Millivolts::new(12_000))] {
+        rig.link.write(write).unwrap();
+    }
+    rig.link.write(off()).unwrap();
+    assert_eq!(rig.link.pending_writes()[0], off(), "first in the queue");
+    rig.run(Duration::from_millis(50));
+    assert!(!rig.sim.is_output_on(), "off goes out first");
+    assert_eq!(rig.sim.set_voltage(), 3.3, "no setpoint has gone yet");
+    rig.run(secs(1));
+    assert_eq!(rig.sim.set_voltage(), 5.0, "they follow, one gap apart");
+    let ids: Vec<u8> = sets(&rig).iter().map(|(_, f)| f.id()).collect();
+    assert_eq!(ids, [0xDB, 0xC1, 0xC2, 0xD1]);
+}
+
+#[test]
+fn app_09_an_off_is_not_merged_into_or_replaced_by_another_write() {
+    let mut rig = Rig::online();
+    rig.sim.panel_output(true);
+    rig.run(secs(1));
+    rig.link.write(off()).unwrap();
+    rig.link.write(volts(5000)).unwrap();
+    rig.link.write(off()).unwrap();
+    let off_count = rig
+        .link
+        .pending_writes()
+        .iter()
+        .filter(|w| **w == off())
+        .count();
+    assert_eq!(off_count, 1, "a second OFF is the same OFF");
+    assert_eq!(rig.link.pending_writes()[0], off());
+    rig.run(secs(1));
+    assert!(!rig.sim.is_output_on());
+}
+
+#[test]
+fn saf_01_an_on_waits_behind_the_setpoints_the_user_saw() {
+    let mut rig = Rig::online();
+    rig.link.write(volts(6000)).unwrap();
+    rig.link.write(amps(1200)).unwrap();
+    rig.link.write(on()).unwrap();
+    assert_eq!(rig.link.pending_writes().last(), Some(&on()));
+    rig.run(secs(1));
+    assert_eq!(rig.sim.set_voltage(), 6.0);
+    assert!(rig.sim.is_output_on());
+    // The order on the wire.
+    let ids: Vec<u8> = sets(&rig).iter().map(|(_, f)| f.id()).collect();
+    assert_eq!(ids, [0xC1, 0xC2, 0xDB]);
+}
+
+#[test]
+fn saf_01_an_on_is_refused_while_an_off_is_queued_or_unconfirmed() {
+    let mut rig = Rig::online();
+    rig.sim.panel_output(true);
+    rig.run(secs(1));
+    rig.link.write(off()).unwrap();
+    assert_eq!(rig.link.write(on()), Err(Refusal::OffPending), "queued");
+    rig.run(Duration::from_millis(30)); // sent, not yet read back
+    assert_eq!(
+        rig.link.write(on()),
+        Err(Refusal::OffPending),
+        "unconfirmed"
+    );
+    rig.run(secs(1));
+    assert_eq!(
+        rig.link.write(on()),
+        Ok(()),
+        "confirmed: an ON is allowed again"
+    );
+}
+
+#[test]
+fn saf_01_a_queued_on_is_void_once_an_off_arrives() {
+    let mut rig = Rig::online();
+    rig.link.write(on()).unwrap();
+    rig.link.write(off()).unwrap();
+    assert_eq!(rig.link.pending_writes(), [off()]);
+    rig.run(secs(1));
+    assert!(!rig.sim.is_output_on());
+}
+
+#[test]
+fn prt_03_an_off_that_did_not_take_shows_in_the_read_back() {
+    let mut rig = Rig::online();
+    rig.sim.panel_output(true);
+    rig.run(secs(1));
+    rig.sim.keep(0xDB, 1.0); // the device keeps the output on
+    rig.link.write(off()).unwrap();
+    rig.run(secs(1));
+    assert_eq!(readbacks(&rig), [(off(), on())]);
+    assert!(rig.sim.is_output_on());
+}
+
+#[test]
+fn lnk_03_an_off_is_refused_like_any_write_while_the_link_is_down() {
+    let mut rig = Rig::new();
+    assert_eq!(rig.link.write(off()), Err(Refusal::NotOnline));
+}

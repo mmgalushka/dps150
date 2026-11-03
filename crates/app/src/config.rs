@@ -70,6 +70,25 @@ impl Default for Config {
     }
 }
 
+impl Config {
+    /// Settings → Safety as the app uses it (SAFETY.md §2). A jump threshold
+    /// of zero or less turns that prompt off.
+    pub fn safety(&self) -> crate::output::Safety {
+        let milli = |value: f64| {
+            if value.is_finite() && value > 0.0 {
+                (value * 1000.0).round().min(f64::from(u32::MAX)) as u32
+            } else {
+                0
+            }
+        };
+        crate::output::Safety {
+            ask_on: self.output_on == OutputOn::Ask,
+            v_jump: milli(self.v_jump),
+            i_jump: milli(self.i_jump),
+        }
+    }
+}
+
 /// The config and, when the file could not be used, the notice for the first
 /// screen.
 #[derive(Clone, Debug, PartialEq)]
@@ -169,6 +188,19 @@ mod tests {
         assert!(!loaded.config.reconnect);
         assert_eq!(loaded.config.refresh_hz, 10);
         assert_eq!(loaded.notice, None);
+    }
+
+    #[test]
+    fn saf_03_the_safety_settings_become_thresholds_in_thousandths() {
+        let safety = Config::default().safety();
+        assert!(safety.ask_on);
+        assert_eq!((safety.v_jump, safety.i_jump), (5_000, 2_000));
+        let loaded = parse_config("output_on = \"immediate\"\nv_jump = 0\ni_jump = 0.25\n");
+        let safety = loaded.config.safety();
+        assert!(!safety.ask_on);
+        assert_eq!((safety.v_jump, safety.i_jump), (0, 250));
+        let loaded = parse_config("v_jump = -3.0\n");
+        assert_eq!(loaded.config.safety().v_jump, 0);
     }
 
     #[test]

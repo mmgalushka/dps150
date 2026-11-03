@@ -9,7 +9,8 @@ use crate::font::{self, Font};
 use crate::format;
 use crate::layout::{COMPACT_WIDTH, Tier};
 use crate::main_panel::{
-    Lit, Output, View, compact_header, draw_key_items, fit_items, header, message_style,
+    Lit, Output, View, compact_header, draw_key_items, draw_prompt, fit_items, header,
+    message_style,
 };
 use crate::paint::Painter;
 use crate::theme::S;
@@ -105,8 +106,7 @@ fn strip(p: &mut Painter, view: &View, area: Rect, x0: u16, width: u16, name: &s
 fn bottom_row(p: &mut Painter, model: &Model, x0: u16, y: u16, width: u16, compact: bool) {
     // A prompt or message replaces the key bar (§5.12).
     if let Some(text) = model.prompt_text(compact) {
-        let column = p.text(x0, y, &format!(" {text}  "), S::Wn);
-        draw_key_items(p, column, y, &[("y", "yes"), ("Esc", "no")]);
+        draw_prompt(p, x0 + 1, y, &text);
         return;
     }
     if let Some(line) = model.message(compact) {
