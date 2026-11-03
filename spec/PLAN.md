@@ -102,9 +102,18 @@ A supervised session with the user at the unit, driven by `hw_probe`. Every writ
 - **Status:** built 2026-11-03 on branch `m4/read-only-monitor`: `app` (CLI, config, port choice, model, keys), `ui` (fonts, theme, tiers, main panel, too-small screen), `dps150` (terminal, signals, panic hook, event loop). All 11 goldens of this stage pass (`main-{compact,standard,large}-{cv,cc}`, `main-{compact,standard}-lost`, `main-{cv,cc}-120x40`, `toosmall-43x16`) plus the three font goldens; size sweep 44×16 to 250×80; 14 level 2 tests of the binary on a pty. **Open: the stage 1 gate itself** (10 minutes on the real unit, a cable pull) is a manual step for the user. In this stage `Space`, `Ctrl-X`, digits and `↑↓` do nothing and no SET exists. `q` quits at once, since nothing can change the output.
 
 ### M5. Setpoints and limits (stage 2)
-- Limit rules, digit cursor, typed entry, write reconciliation, coalescing, Protection and Presets screens. Output writes are still absent from the code.
-- Requirements: PRT-03, PRT-04, LIM-01 to LIM-09, LNK-03, EDT-01 to EDT-07, PRE-01 to PRE-04, CFG-02, SAF-12, APP-12.
-- *Exit:* the stage 2 gate. Before and after a session on the unit, a dump comparison shows only the intended changes.
+Built in two parts, each its own branch and pull request, because together they are larger than any other milestone.
+
+**M5a. Write path and main-panel editing.**
+- The typed `Write` in `protocol`; in `device` the write queue (one per register, one SET per `SET_GAP`), the second range check, read-back and refusal; in `app` the limit rules, the digit cursor with `↑` `↓`, typed entry, optimistic values reconciled by the read-back, and the message line; in `ui` the entry renderings.
+- Requirements: PRT-03, PRT-04, LIM-01 to LIM-09 (the Protection-screen half of LIM-05 and LIM-06 waits for M5b), LNK-03, EDT-01 to EDT-06, APP-12.
+- *Exit:* goldens `main-standard-entry`, `main-standard-reject`, `main-compact-entry` pass; level 2 tests show the arrow keys and typed entry change the simulator and nothing else.
+- **Status:** built 2026-11-03 on branch `m5/setpoints-limits`. While the output is ON a setpoint change is **held back** with the notice `Output is ON: changes are not sent yet`: the jump guard that would make it safe belongs to M6 (SAF-06), and stage 2 keeps the output OFF.
+
+**M5b. Presets and Protection screens.**
+- Secondary-screen frame (header, strip, key bar), the Presets and Protection screens, the `m` recall chord, overwrite and clear prompts, `presets.toml` and rename.
+- Requirements: PRE-01 to PRE-04, CFG-02, SAF-12, EDT-07, and the rest of LIM-05 and LIM-06.
+- *Exit:* the stage 2 gate. Goldens `presets-*` and `protection-*` pass. Before and after a session on the unit, a dump comparison shows only the intended changes.
 
 ### M6. Output control (stage 3)
 - Output ON and OFF, prompts, jump guard, recall prompt, too-small rules, OFF priority, tripped state, queued OFF and reconnect, quit, signals.
@@ -135,17 +144,17 @@ Only H1 depends on the user being present, plus the stage gates and the M8 steps
 
 | Area | Milestone |
 |---|---|
-| PRT | 01, 06 M3 · 02 M1 · 03, 04 M5 · 05 M4 |
+| PRT | 01, 06 M3 · 02 M1 · 03, 04 M5a · 05 M4 |
 | CLI | 01, 02 M4 |
-| LIM | 01–09 M5 |
-| SAF | 01–11 M6 · 12 M5 |
-| LNK | 01, 06 M3 · 02 M4 · 03 M5 · 04, 05, 07 M6 |
-| EDT | 01–07 M5 |
-| PRE | 01–04 M5 |
+| LIM | 01–09 M5a (Protection-screen half of 05, and 06: M5b) |
+| SAF | 01–11 M6 · 12 M5b |
+| LNK | 01, 06 M3 · 02 M4 · 03 M5a · 04, 05, 07 M6 |
+| EDT | 01–06 M5a · 07 M5b |
+| PRE | 01–04 M5b |
 | PRO | 01, 02 M6 |
-| CFG | 01 M4 · 02 M5 |
+| CFG | 01 M4 · 02 M5b |
 | UI | 01, 03, 06, 07, 10–15, 17 M4 · 02, 04, 05, 08, 09, 16 M7 |
-| APP | 01, 02, 08, 10, 11 M3 · 03, 04 M1 · 05, 06, 07 M4 · 09 M6 · 12 M5 |
+| APP | 01, 02, 08, 10, 11 M3 · 03, 04 M1 · 05, 06, 07 M4 · 09 M6 · 12 M5a |
 | SIM | 01–12 M2 |
 
 ## 6. Risks

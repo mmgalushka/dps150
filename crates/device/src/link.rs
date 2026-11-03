@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use protocol::{Dir, Dump, Frame, Reader, Register, Reply, Stats};
+use protocol::{Dir, Dump, Frame, Reader, Register, Reply, Stats, Write};
 
 use crate::constants::{
     DEFAULT_REFRESH_HZ, HANDSHAKE_RESEND, HANDSHAKE_TIMEOUT, MISSED_TICKS, RECONNECT_INTERVAL,
@@ -55,6 +55,20 @@ pub enum Event {
     Lost(Cause),
     /// Start-up failed (APP-01).
     Failed(Cause),
+    /// The dump read after a SET: `written` is what was sent, `device` the
+    /// same register as the device holds it (PRT-03).
+    ReadBack { written: Write, device: Write },
+    /// A write the core refused: a defect in the layer above (APP-12).
+    WriteRefused { write: Write, why: Refusal },
+}
+
+/// Why `Link::write` said no.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Refusal {
+    /// Link down or no full dump yet (LNK-03, SAF-12).
+    NotOnline,
+    /// Outside the device range (APP-12).
+    OutOfRange,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -93,6 +107,11 @@ pub struct LinkStats {
     pub missed_ticks: u64,
     /// Poll ticks that were quiet because of `SET_GAP`.
     pub quiet_ticks: u64,
+    /// SETs put on the wire.
+    pub sets_sent: u64,
+    /// Writes refused by the second range check; a non-zero count is a defect
+    /// (APP-12).
+    pub refused_writes: u64,
 }
 
 pub struct Link {
@@ -119,6 +138,12 @@ pub struct Link {
     missed: u32,
 
     retry_at: Option<Duration>,
+    /// Writes waiting for their turn, one per register (the latest wins).
+    pending: Vec<Write>,
+    /// Written, waiting for the next poll to read them back.
+    unchecked: Vec<Write>,
+    /// Riding on the poll in flight.
+    readback: Vec<Write>,
     dump: Option<Dump>,
     model: Option<String>,
     hardware: Option<String>,
@@ -146,6 +171,9 @@ impl Link {
             outstanding: false,
             missed: 0,
             retry_at: None,
+            pending: Vec::new(),
+            unchecked: Vec::new(),
+            readback: Vec::new(),
             dump: None,
             model: None,
             hardware: None,
@@ -209,6 +237,44 @@ impl Link {
 
     pub fn take_events(&mut self) -> Vec<Event> {
         std::mem::take(&mut self.events)
+    }
+
+    // ---- writes -------------------------------------------------------------
+
+    /// Queues a write. Only an online link with a full dump accepts one, and
+    /// only a value inside the device range (APP-12). A second write to the
+    /// same register replaces the first before it is sent; at most one SET
+    /// goes out per `SET_GAP`, always the oldest register first.
+    pub fn write(&mut self, write: Write) -> Result<(), Refusal> {
+        let refuse = |this: &mut Self, why| {
+            this.stats.refused_writes += 1;
+            this.events.push(Event::WriteRefused { write, why });
+            Err(why)
+        };
+        let Some(dump) = self.dump.as_ref().filter(|_| self.state == State::Online) else {
+            return refuse(self, Refusal::NotOnline);
+        };
+        let limit = match write {
+            Write::SetVoltage(_) | Write::PresetVoltage(..) => dump.ovp_range.get(),
+            Write::SetCurrent(_) | Write::PresetCurrent(..) => dump.max_current.get(),
+            Write::Ovp(_) => dump.ovp_range.get(),
+            Write::Ocp(_) => dump.ocp_range.get(),
+            Write::Opp(_) => dump.opp_range.get(),
+            Write::Otp(_) => dump.otp_range.get(),
+            Write::Lvp(_) => dump.lvp_range.get(),
+        };
+        if write.thousandths() > limit {
+            return refuse(self, Refusal::OutOfRange);
+        }
+        self.pending
+            .retain(|queued| queued.register() != write.register());
+        self.pending.push(write);
+        Ok(())
+    }
+
+    /// Writes queued and not yet on the wire.
+    pub fn pending_writes(&self) -> &[Write] {
+        &self.pending
     }
 
     // ---- transport reports ------------------------------------------------
@@ -318,6 +384,15 @@ impl Link {
 
     fn poll_online(&mut self, now: Duration) -> Vec<u8> {
         let mut out = Vec::new();
+        // One SET per gap: nothing may follow it for `SET_GAP`, and the ticks
+        // below are quiet until then (SAF-15).
+        if now >= self.quiet_until && !self.pending.is_empty() {
+            let write = self.pending.remove(0);
+            out.extend(write.to_frame().encode());
+            self.stats.sets_sent += 1;
+            self.quiet_until = now + SET_GAP;
+            self.unchecked.push(write);
+        }
         let period = self.period();
         while now >= self.next_tick {
             let tick = self.next_tick;
@@ -335,6 +410,9 @@ impl Link {
             } else {
                 out.extend(Frame::get(Register::Dump).encode());
                 self.outstanding = true;
+                // This poll goes out after the gap, so its dump shows what
+                // the device made of the writes (PRT-03).
+                self.readback.append(&mut self.unchecked);
             }
         }
         out
@@ -346,6 +424,12 @@ impl Link {
         match reply {
             Reply::Dump(dump) => {
                 self.dump = Some(*dump);
+                if let Some(dump) = self.dump.as_ref() {
+                    for written in std::mem::take(&mut self.readback) {
+                        let device = device_value(dump, written);
+                        self.events.push(Event::ReadBack { written, device });
+                    }
+                }
                 self.version += 1;
                 self.outstanding = false;
                 self.missed = 0;
@@ -403,6 +487,10 @@ impl Link {
     }
 
     fn lose(&mut self, now: Duration, cause: Cause) {
+        // Nothing queued survives the loss (LNK-03).
+        self.pending.clear();
+        self.unchecked.clear();
+        self.readback.clear();
         self.outstanding = false;
         self.missed = 0;
         self.reset_reader();
@@ -418,5 +506,25 @@ impl Link {
             self.state = State::Failed;
             self.events.push(Event::Failed(cause));
         }
+    }
+}
+
+/// The value the device holds for the register `written` went to.
+fn device_value(dump: &Dump, written: Write) -> Write {
+    let slot_index = |slot: protocol::Slot| usize::from(slot.number() - 1);
+    match written {
+        Write::SetVoltage(_) => Write::SetVoltage(dump.set_voltage),
+        Write::SetCurrent(_) => Write::SetCurrent(dump.set_current),
+        Write::PresetVoltage(slot, _) => {
+            Write::PresetVoltage(slot, dump.presets[slot_index(slot)].voltage)
+        }
+        Write::PresetCurrent(slot, _) => {
+            Write::PresetCurrent(slot, dump.presets[slot_index(slot)].current)
+        }
+        Write::Ovp(_) => Write::Ovp(dump.ovp),
+        Write::Ocp(_) => Write::Ocp(dump.ocp),
+        Write::Opp(_) => Write::Opp(dump.opp),
+        Write::Otp(_) => Write::Otp(dump.otp),
+        Write::Lvp(_) => Write::Lvp(dump.lvp),
     }
 }

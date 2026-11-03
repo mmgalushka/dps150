@@ -71,6 +71,34 @@ impl Sim {
         self.stdout.read_line(&mut reply).unwrap();
         assert_eq!(reply.trim_end(), "ok", "{line}");
     }
+
+    /// The simulator's `state`, as `name value` pairs.
+    fn state(&mut self) -> std::collections::HashMap<String, String> {
+        writeln!(self.stdin, "state").unwrap();
+        let mut pairs = std::collections::HashMap::new();
+        loop {
+            let mut line = String::new();
+            self.stdout.read_line(&mut line).unwrap();
+            let line = line.trim_end();
+            if line == "ok" {
+                return pairs;
+            }
+            let (name, value) = line.split_once(' ').unwrap_or((line, ""));
+            pairs.insert(name.to_string(), value.to_string());
+        }
+    }
+
+    /// Waits until `name` has `value` in the simulator.
+    fn wait_state(&mut self, name: &str, value: &str) {
+        let begin = Instant::now();
+        while begin.elapsed() < Duration::from_secs(5) {
+            if self.state().get(name).map(String::as_str) == Some(value) {
+                return;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+        panic!("{name} is {:?}, wanted {value}", self.state().get(name));
+    }
 }
 
 impl Drop for Sim {
@@ -482,5 +510,129 @@ fn ui_01_a_terminal_below_the_floor_shows_the_too_small_screen() {
     tui.wait_for("Terminal too small");
     tui.wait_for("need 44×16, have 43×15");
     tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+// ---- editing --------------------------------------------------------------------
+
+const UP: &[u8] = b"\x1b[A";
+const DOWN: &[u8] = b"\x1b[B";
+const RIGHT: &[u8] = b"\x1b[C";
+
+#[test]
+fn prt_05_starting_and_looking_changes_nothing_on_the_device() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    thread::sleep(Duration::from_secs(1));
+    let state = sim.state();
+    assert_eq!(state["vset"], "3.3");
+    assert_eq!(state["iset"], "2");
+    assert_eq!(state["dropped"], "0");
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn edt_03_the_arrow_keys_step_the_digit_under_the_cursor_on_the_device() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(UP);
+    sim.wait_state("vset", "4.3");
+    tui.send(RIGHT);
+    tui.send(DOWN);
+    sim.wait_state("vset", "4.2");
+    // Three quick steps: coalesced, the last value arrives, nothing is lost.
+    tui.send(UP);
+    tui.send(UP);
+    tui.send(UP);
+    sim.wait_state("vset", "4.5");
+    assert_eq!(sim.state()["dropped"], "0", "the write gap kept every SET");
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn lim_09_typed_entry_sets_the_voltage_and_the_current() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b"v");
+    tui.wait_for("Typing a voltage. Range 0 – 20.03 V (live maximum)");
+    tui.send(b"12.5\r");
+    sim.wait_state("vset", "12.5");
+    tui.send(b"i");
+    tui.wait_for("Typing a current. Range 0 – 5.10 A");
+    tui.send(b"0.75\r");
+    sim.wait_state("iset", "0.75");
+    tui.wait_for("▸ CURRENT");
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn lim_08_a_value_above_the_live_maximum_is_rejected_and_nothing_is_sent() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b"35\r");
+    tui.wait_for("35 V is above the live maximum 20.03 V");
+    thread::sleep(Duration::from_millis(500));
+    let state = sim.state();
+    assert_eq!(state["vset"], "3.3");
+    assert_eq!(state["dropped"], "0");
+    // The entry is still open and editable; Esc leaves it.
+    tui.send(b"\x7f\x7f");
+    tui.wait_for("Typing a voltage");
+    tui.send(b"\x1b");
+    // Esc alone is told from the start of a key sequence by a short pause.
+    thread::sleep(Duration::from_millis(300));
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn prt_03_a_value_the_device_keeps_is_shown_as_such() {
+    let mut sim = Sim::start();
+    sim.command("keep C1 4.0");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(UP);
+    tui.wait_for("Device kept 4.00 V");
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn lnk_03_with_the_link_down_edits_are_refused_and_nothing_goes_out_on_reconnect() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    sim.command("unplug");
+    tui.wait_for("no link");
+    tui.send(UP);
+    tui.wait_for("Link down. Changes are not sent.");
+    sim.command("plug");
+    tui.wait_for("connected");
+    thread::sleep(Duration::from_millis(600));
+    assert_eq!(sim.state()["vset"], "3.3");
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_03_while_the_output_is_on_a_change_is_held_back() {
+    // The output is switched on from the simulator side (as the panel could);
+    // this build has no way to confirm a live change.
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    sim.command("panel on");
+    tui.wait_for("OUTPUT  ON");
+    tui.send(UP);
+    tui.wait_for("Output is ON: changes are not sent yet");
+    assert_eq!(sim.state()["vset"], "3.3");
+    tui.send(b"q");
     assert_eq!(tui.wait_exit(), 0);
 }

@@ -282,6 +282,16 @@ impl SimDevice {
         self.keep.insert(id, value);
     }
 
+    /// The front-panel output button, which works while a session is open
+    /// (the host cannot tell the difference). Like `DB = 01`, switching on
+    /// clears a latched trip (PROTOCOL.md §7.9).
+    pub fn panel_output(&mut self, on: bool) {
+        if on {
+            self.protection = Protection::None;
+        }
+        self.output_on = on;
+    }
+
     /// The device goes silent and ignores input; the output state is kept.
     pub fn unplug(&mut self) {
         self.unplugged = true;

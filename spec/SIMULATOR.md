@@ -65,6 +65,7 @@ The same operations exist as library methods on `SimDevice` and as one-line comm
 | `temp <celsius>` | Set the temperature (for OTP tests) |
 | `trip ovp\|ocp\|opp\|otp\|lvp` | Force that protection to trip now |
 | `keep <type> <value>` | The device silently keeps `<value>` for that type instead of the SET value (the "Device kept" case, DESIGN.md §10) |
+| `panel on\|off` | The front-panel output button: turns the output on (clearing a latched trip, like `DB = 01`) or off, with no frame from the host |
 | `unplug` / `plug` | `unplug`: the device goes silent and ignores input, the port stays open (link-loss by timeout); **the output state is kept** (a pulled cable leaves the output ON, PROTOCOL.md §7.10). `plug`: it answers again, but only after a new connect frame, like a device that lost its session |
 | `close` / `reopen` | `close` closes the pty (the app sees an I/O error, like a pulled cable); `reopen` opens a new pty and prints its path |
 | `corrupt <n>` | The next `n` frames sent have a wrong checksum |

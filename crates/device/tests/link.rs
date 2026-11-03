@@ -1,101 +1,11 @@
-//! Level 1 (DEVOPS.md §4): the pure link core piped to `SimDevice` under one
-//! injected clock. Nothing sleeps.
+mod common;
 
 use std::time::Duration;
 
+use common::{MS, Rig, secs};
 use device::constants::{HANDSHAKE_RESEND, RECONNECT_INTERVAL};
 use device::{Cause, Event, Link, LinkConfig, OpenError, State};
-use protocol::{Dir, Frame, Reader, Register, command};
-use simulator::SimDevice;
-
-const MS: Duration = Duration::from_millis(1);
-
-struct Rig {
-    link: Link,
-    sim: SimDevice,
-    now: Duration,
-    /// Every frame the link wrote, with the time it was written.
-    written: Vec<(Duration, Frame)>,
-    host: Reader,
-    events: Vec<Event>,
-}
-
-impl Rig {
-    fn new() -> Self {
-        Self::with(LinkConfig::default())
-    }
-
-    fn with(config: LinkConfig) -> Self {
-        Self {
-            link: Link::new(config),
-            sim: SimDevice::new(),
-            now: Duration::ZERO,
-            written: Vec::new(),
-            host: Reader::new(Dir::HostToDevice),
-            events: Vec::new(),
-        }
-    }
-
-    /// The transport opens the port when the core asks.
-    fn open_if_wanted(&mut self) {
-        if self.link.wants_open(self.now) {
-            self.link.port_opened(self.now);
-        }
-    }
-
-    /// One millisecond: device output in, core poll, core output to the device.
-    fn tick(&mut self) {
-        self.now += MS;
-        self.sim.advance(MS);
-        let incoming = self.sim.take_output();
-        self.link.feed(self.now, &incoming);
-        self.open_if_wanted();
-        let out = self.link.poll(self.now);
-        if !out.is_empty() {
-            for frame in self.host.feed(self.now, &out) {
-                self.written.push((self.now, frame));
-            }
-            self.sim.feed(&out);
-        }
-        self.events.extend(self.link.take_events());
-    }
-
-    fn run(&mut self, span: Duration) {
-        let end = self.now + span;
-        while self.now < end {
-            self.tick();
-        }
-    }
-
-    fn run_until(&mut self, limit: Duration, done: impl Fn(&Rig) -> bool) {
-        let end = self.now + limit;
-        while self.now < end && !done(self) {
-            self.tick();
-        }
-        assert!(done(self), "condition not reached within {limit:?}");
-    }
-
-    fn online() -> Self {
-        let mut rig = Self::new();
-        rig.run_until(Duration::from_secs(2), |rig| {
-            rig.link.state() == State::Online
-        });
-        rig
-    }
-
-    fn polls(&self, since: Duration) -> usize {
-        self.written
-            .iter()
-            .filter(|(at, frame)| {
-                *at > since && frame.command() == command::DATA && frame.id() == Register::Dump.id()
-            })
-            .count()
-    }
-}
-
-fn secs(seconds: u64) -> Duration {
-    Duration::from_secs(seconds)
-}
+use protocol::{Frame, Register, command};
 
 // ---- handshake -------------------------------------------------------------
 

@@ -83,7 +83,9 @@ fn run(cli: &app::Cli) -> Result<(), String> {
         env("TERM").as_deref(),
     ));
     let mut model = Model::new(port, config.reconnect);
-    model.notice = loaded.notice;
+    if let Some(notice) = loaded.notice {
+        model.notify(notice);
+    }
     // The device thread has already delivered the first snapshot.
     while let Ok(message) = device.messages().try_recv() {
         model.apply(message);
@@ -106,9 +108,15 @@ fn event_loop(
     theme: ui::Theme,
     stop: &AtomicBool,
 ) -> io::Result<()> {
-    let mut last_draw = Instant::now();
+    let begin = Instant::now();
+    let mut last_draw = begin;
     let mut dirty = true;
     loop {
+        let before = model.clone();
+        model.tick(begin.elapsed());
+        if *model != before {
+            dirty = true;
+        }
         if stop.load(Ordering::Relaxed) {
             return Ok(());
         }
@@ -124,6 +132,7 @@ fn event_loop(
                         match model.on_key(key) {
                             Effect::Quit => return Ok(()),
                             Effect::Reconnect => device.send(Command::Reconnect),
+                            Effect::Write(write) => device.send(Command::Write(write)),
                             Effect::None => {}
                         }
                     }

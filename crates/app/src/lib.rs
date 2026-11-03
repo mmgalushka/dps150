@@ -5,12 +5,14 @@
 
 mod cli;
 mod config;
+pub mod constants;
+pub mod limits;
 mod model;
 mod port;
 
 pub use cli::{Cli, parse_args};
 pub use config::{ColorSetting, Config, Loaded, OnExit, OutputOn, config_path, load_config};
-pub use model::{Effect, Focus, Key, LinkStatus, Model};
+pub use model::{Effect, Entry, Focus, Key, Line, LinkStatus, Model, Tone};
 pub use port::{PortInfo, ResolveError, USB_ID, resolve_port};
 
 pub mod locale {

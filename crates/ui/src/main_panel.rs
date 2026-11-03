@@ -1,6 +1,6 @@
 //! The main panel at every tier (DESIGN.md §2, §5.5 to §5.10, §6).
 
-use app::{Focus, LinkStatus, Model};
+use app::{Focus, LinkStatus, Model, Tone};
 use protocol::Mode;
 use protocol::value::{Milliamps, Millivolts};
 use ratatui::layout::Rect;
@@ -53,13 +53,16 @@ struct View {
     firmware: Option<String>,
     hardware: Option<String>,
     port: String,
-    notice: Option<String>,
+    /// Typed entry in progress: focus, text, refused.
+    entry: Option<(Focus, String, bool)>,
+    /// The message line: a notice, a hint or the live-maximum warning.
+    message: Option<(String, Tone)>,
     focus: Focus,
     cursors: [usize; 2],
 }
 
 impl View {
-    fn new(model: &Model) -> Self {
+    fn new(model: &Model, compact: bool) -> Self {
         let online = model.is_online();
         let auto_reconnect = matches!(
             model.link,
@@ -90,8 +93,9 @@ impl View {
             output,
             lit,
             protection,
-            set_voltage: dump.map(|d| d.set_voltage),
-            set_current: dump.map(|d| d.set_current),
+            // What is on screen: a pending edit shows before it is read back.
+            set_voltage: model.set_voltage(),
+            set_current: model.set_current(),
             measured: dump
                 .filter(|_| online)
                 .map(|d| (d.output.voltage, d.output.current, d.output.power)),
@@ -109,7 +113,10 @@ impl View {
             firmware: snapshot.and_then(|s| s.firmware.clone()),
             hardware: snapshot.and_then(|s| s.hardware.clone()),
             port: model.port.clone(),
-            notice: model.notice.clone(),
+            entry: model
+                .entry()
+                .map(|entry| (entry.focus, entry.text.clone(), entry.rejected)),
+            message: model.message(compact).map(|line| (line.text, line.tone)),
             focus: model.focus,
             cursors: [model.cursor(Focus::Voltage), model.cursor(Focus::Current)],
         }
@@ -122,7 +129,7 @@ impl View {
 
 /// Draws the main panel into `area` of `p`'s buffer.
 pub(crate) fn draw(p: &mut Painter, model: &Model, area: Rect, tier: Tier) {
-    let view = View::new(model);
+    let view = View::new(model, tier == Tier::Compact);
     match tier {
         Tier::Compact => compact(p, &view, area),
         Tier::Standard | Tier::Large => fluid(p, &view, area, tier),
@@ -227,9 +234,18 @@ fn key_bar_items(layout_width: usize) -> Vec<(&'static str, &'static str)> {
     items
 }
 
-fn key_bar(p: &mut Painter, x: u16, y: u16, layout_width: u16) {
+/// While typed entry is open the bar is replaced; there is no `? help`
+/// because `?` is not a typed character (§5.8).
+const ENTRY_KEYS: [(&str, &str); 3] = [("⏎", "apply"), ("Esc", "cancel"), ("Space", "off")];
+
+fn key_bar(p: &mut Painter, x: u16, y: u16, layout_width: u16, entry: bool) {
+    let items = if entry {
+        ENTRY_KEYS.to_vec()
+    } else {
+        key_bar_items(usize::from(layout_width))
+    };
     let mut column = x;
-    for (key, label) in key_bar_items(usize::from(layout_width)) {
+    for (key, label) in items {
         let cap = format!(" {key} ");
         let label = format!(" {label}  ");
         column = p.spans(column, y, &[(&cap, S::K), (&label, S::D)]);
@@ -308,6 +324,14 @@ fn lost_spans(view: &View, compact: bool) -> Vec<(String, S)> {
     }
 }
 
+/// The message line text in its tone (§5.12).
+fn message_style(tone: Tone) -> S {
+    match tone {
+        Tone::Warn => S::Wn,
+        Tone::Error => S::Er,
+    }
+}
+
 fn draw_spans(p: &mut Painter, x: u16, y: u16, spans: &[(String, S)]) -> u16 {
     spans
         .iter()
@@ -358,10 +382,11 @@ fn compact(p: &mut Painter, view: &View, area: Rect) {
 
     // Info row.
     let info_y = y0 + 12;
-    if !view.online {
+    // A transient message replaces the standing text for its three seconds.
+    if let Some((text, tone)) = &view.message {
+        p.text(x0 + 1, info_y, text, message_style(*tone));
+    } else if !view.online {
         draw_spans(p, x0 + 1, info_y, &lost_spans(view, true));
-    } else if let Some(notice) = &view.notice {
-        p.text(x0 + 1, info_y, notice, S::Wn);
     } else if let (Some(vin), Some(temp), Some(energy)) = (view.vin, view.temperature, view.energy)
     {
         p.spans(
@@ -378,7 +403,7 @@ fn compact(p: &mut Painter, view: &View, area: Rect) {
         );
     }
     debug_assert_eq!(y0 + COMPACT_ROWS - 1, y0 + 13);
-    key_bar(p, x0, y0 + 13, COMPACT_WIDTH);
+    key_bar(p, x0, y0 + 13, COMPACT_WIDTH, view.entry.is_some());
 }
 
 fn compact_readout(p: &mut Painter, view: &View, rect: Rect, which: Focus) {
@@ -416,6 +441,14 @@ fn compact_readout(p: &mut Painter, view: &View, rect: Rect, which: Focus) {
     };
     for (row, line) in crate::font::F3.render(&digits).iter().enumerate() {
         p.text(x, y + row as u16, line, digit_style);
+    }
+    let typing = view.entry.as_ref().filter(|(focus, _, _)| *focus == which);
+    if let Some((_, text, rejected)) = typing {
+        // The typed characters replace the set value (§6.3).
+        let style = if *rejected { S::Er } else { S::Sel };
+        p.spans(x, y + 3, &[("SET ", S::D), (text, style)]);
+        p.text(x, y + 4, "⏎ set  Esc cancel", S::D);
+        return;
     }
     let column = p.spans(x, y + 3, &[("SET ", S::D), (&set_text, S::Set)]);
     if which == Focus::Current && view.lit == Lit::Cc {
@@ -464,7 +497,7 @@ fn fluid(p: &mut Painter, view: &View, area: Rect, tier: Tier) {
     } else {
         memory_row(p, view, area.x, below, cols);
     }
-    key_bar(p, area.x, area.y + rows - 1, cols);
+    key_bar(p, area.x, area.y + rows - 1, cols, view.entry.is_some());
 }
 
 fn which_index(which: Focus) -> usize {
@@ -541,6 +574,16 @@ fn fluid_readout(p: &mut Painter, view: &View, rect: Rect, which: Focus, font: F
     }
     let set_y = top + 1 + h + 1;
     p.text(inner.x, set_y, "SET  ←→ digit  ↑↓ value", S::D);
+    let typing = view.entry.as_ref().filter(|(focus, _, _)| *focus == which);
+    if let Some((_, text, rejected)) = typing {
+        // Typed characters in the big font, no leading-zero padding (§6.2).
+        let style = if *rejected { S::Er } else { S::Set };
+        for (row, line) in font.render(text).iter().enumerate() {
+            p.text(margin, set_y + 1 + row as u16, line, style);
+        }
+        p.text(inner.x, set_y + 1 + h, "⏎ apply · Esc cancel", S::D);
+        return;
+    }
     for (row, line) in font.render(&set_text).iter().enumerate() {
         p.text(margin, set_y + 1 + row as u16, line, S::Set);
     }
@@ -569,13 +612,13 @@ fn fluid_status(p: &mut Painter, view: &View, rect: Rect, tier: Tier) {
         p.spans(column, y1, &[("    ", S::Page), ("all clear", S::Ok)]);
     }
 
-    // Line 2.
-    if !view.online {
-        draw_spans(p, x, y2, &lost_spans(view, false));
+    // Line 2. A transient message replaces the standing text (§5.12).
+    if let Some((text, tone)) = &view.message {
+        p.text(x, y2, text, message_style(*tone));
         return;
     }
-    if let Some(notice) = &view.notice {
-        p.text(x, y2, notice, S::Wn);
+    if !view.online {
+        draw_spans(p, x, y2, &lost_spans(view, false));
         return;
     }
     let extra = usize::from(rect.width).saturating_sub(if large { 100 } else { 80 });

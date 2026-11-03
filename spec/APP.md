@@ -95,6 +95,8 @@ The `device` layer owns the link. States and transitions:
 
 ### 7.1 Interface of the device crate
 
+- **Writes (M5a).** `Link::write(Write)` queues a setpoint, preset or limit write. It refuses (`Event::WriteRefused`, counted in `LinkStats::refused_writes`) when the link is not online with a full dump, or when the value exceeds the device range (`E4` for voltages, `E3` for currents, `E4`..`E8` for limits). A second write to the same register replaces the first before it is sent; at most one SET goes out per `SET_GAP`, so the 50 ms `SET_COALESCE` of §8 is subsumed by it. The first poll after the gap carries the read-back: its dump yields one `Event::ReadBack { written, device }` per write, and `Write::differs_from` decides whether the app says `Device kept …` (PRT-03). A link loss drops everything queued.
+
 - `Link` is the core of §5: `wants_open`, `port_opened`, `open_failed`, `io_error`, `feed(now, bytes)`, `poll(now) -> bytes`, `take_events`, `snapshot`, `request_reconnect`. It writes only the connect frame and GETs until the write path exists.
 - `Device::start(port, config)` opens the port, runs the handshake and returns once the first full dump has arrived, or fails with the `StartupError` whose `Display` is the stderr message of APP-01. After that, `Device::messages()` carries `Message::Event` (`Online { restored }`, `Lost`) and `Message::Model` (a new snapshot whenever it changes); `Device::send(Command)` takes `Reconnect`, `Refresh`, `AutoReconnect`. Dropping the `Device` stops the thread and sends nothing.
 - A failed retry while `Lost` raises no new `Lost` event. The first poll comes one period after the first dump. Pushed frames patch the last dump (`C0`, `C3`, `C4`, `E2`, `E3`); they never answer a poll.

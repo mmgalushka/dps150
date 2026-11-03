@@ -10,6 +10,8 @@ use std::time::{Duration, Instant};
 use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
 
 use crate::constants::BAUD;
+use protocol::Write as Setting;
+
 use crate::link::{Cause, Event, Link, LinkConfig, OpenError, Snapshot, State};
 
 /// How long one read waits; also the pace of the thread.
@@ -26,6 +28,8 @@ pub enum Command {
     Refresh(u32),
     /// Retry automatically while the link is down.
     AutoReconnect(bool),
+    /// A setpoint, preset or limit write. The core checks it again (APP-12).
+    Write(Setting),
 }
 
 /// Device thread to UI.
@@ -175,6 +179,8 @@ fn run(
                 Command::Reconnect => link.request_reconnect(begin.elapsed()),
                 Command::Refresh(hz) => link.set_refresh_hz(hz),
                 Command::AutoReconnect(on) => link.set_reconnect(on),
+                // A refusal comes back as an event.
+                Command::Write(write) => drop(link.write(write)),
             }
         }
 
@@ -229,6 +235,7 @@ fn run(
                 let _ = match event {
                     Event::Online { .. } => signal.send(Ok(())),
                     Event::Failed(cause) | Event::Lost(cause) => signal.send(Err(cause)),
+                    _ => Ok(()),
                 };
                 continue;
             }
