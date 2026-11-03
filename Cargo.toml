@@ -26,8 +26,14 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+app.workspace = true
+device.workspace = true
 ui.workspace = true
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+serialport = "4.10.1"
+signal-hook = "0.4.6"
 
 [dev-dependencies]
 serialport = "4.10.1"
 device.workspace = true
+vt100 = "0.18.1"

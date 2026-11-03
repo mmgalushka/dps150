@@ -99,6 +99,7 @@ A supervised session with the user at the unit, driven by `hw_probe`. Every writ
 - `dps150` binary, CLI and port resolution, config reading, model, terminal setup and restore, tier selection, fonts, header, strip, readouts and status for the main panel at all tiers.
 - Requirements: CLI-01, CLI-02, PRT-05, LNK-02, CFG-01, APP-05, APP-06, APP-07, UI-01, UI-03, UI-06, UI-07, UI-10, UI-11, UI-12, UI-13, UI-14, UI-15, UI-17.
 - *Exit:* the stage 1 gate. Main-panel goldens that need no editing state pass: `main-*-cv`, `main-*-cc`, `main-*-lost`.
+- **Status:** built 2026-11-03 on branch `m4/read-only-monitor`: `app` (CLI, config, port choice, model, keys), `ui` (fonts, theme, tiers, main panel, too-small screen), `dps150` (terminal, signals, panic hook, event loop). All 11 goldens of this stage pass (`main-{compact,standard,large}-{cv,cc}`, `main-{compact,standard}-lost`, `main-{cv,cc}-120x40`, `toosmall-43x16`) plus the three font goldens; size sweep 44×16 to 250×80; 14 level 2 tests of the binary on a pty. **Open: the stage 1 gate itself** (10 minutes on the real unit, a cable pull) is a manual step for the user. In this stage `Space`, `Ctrl-X`, digits and `↑↓` do nothing and no SET exists. `q` quits at once, since nothing can change the output.
 
 ### M5. Setpoints and limits (stage 2)
 - Limit rules, digit cursor, typed entry, write reconciliation, coalescing, Protection and Presets screens. Output writes are still absent from the code.

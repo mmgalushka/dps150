@@ -290,7 +290,7 @@ Text surrounded by one space each side: ` CV `, ` CC `, ` ON `, ` OFF `, ` ? `, 
 
 - **Mode badges (Standard, Large):** ` CV ` and ` CC `. Only one is active at a time; with output off, tripped or the link down, both are `boff`.
 - **Mode badge (Compact):** a single badge: ` CV ` (`bcv`), ` CC ` (`bcc`), or ` -- ` (`boff`) when output is off, tripped or the link is down.
-- **Output badge:** ` ON ` (`bon`), ` OFF ` (`boff`), or ` ? ` (`bun`) when the output state is unknown because the link is down (§6.7).
+- **Output badge:** ` ON ` (`bon`), ` OFF ` (`boff`), or ` ? ` (`bun`) when the output state is unknown because the link is down (§6.7). In the Compact status line the unknown badge is drawn 5 cells wide, `  ?  `, the width of ` OFF `, so the power value keeps its column (`main-compact-lost`).
 
 ### 5.6 Key cap
 
@@ -320,7 +320,7 @@ Full width, background `bar`. Left part, then fill (`hd`), then right part.
 | Tier | Left | Right |
 |---|---|---|
 | Compact | ` FNIRSI ` (`hb`) ` DPS-150` (`hd`) | status label (below) |
-| Standard | ` FNIRSI ` ` DPS-150 · fw V1.2` | status label + ` usbmodem13C85FCE40251 ` (`hd`, port basename) |
+| Standard | ` FNIRSI ` ` DPS-150 · fw V1.2` | status label + ` usbmodem13C85FCE40251 ` (`hd`, port file name without the macOS `cu.` or `tty.` prefix) |
 | Large | ` FNIRSI ` ` DPS-150 · fw V1.2 · hw V1.0` | status label + ` /dev/cu.usbmodem13C85FCE40251 ` (`hd`, full path) |
 
 - The header variant follows the **layout and band** (Compact, Fluid Standard, Fluid Large), on every screen, including secondary screens.
@@ -408,7 +408,7 @@ Box width 22, titles `VOLTAGE (V)` / `CURRENT (A)`; the focused box gets the `�
 
 Title `Status`. Two inner lines.
 
-**Standard and Large, line 1:** `MODE ` (`d`) + CV badge + space + CC badge + `   OUTPUT ` (`d`) + output badge (ON / OFF / `?`, §5.5) + `   PROTECT ` (`d`) + five lamps (§5.4). Large only: after the lamps, two spaces + `all clear` (`ok`) when no protection is tripped and the link is up.
+**Standard and Large, line 1:** `MODE ` (`d`) + CV badge + space + CC badge + `   OUTPUT ` (`d`) + output badge (ON / OFF / `?`, §5.5) + `   PROTECT ` (`d`) + five lamps (§5.4). Large only: after the lamps, four spaces + `all clear` (`ok`) when no protection is tripped and the link is up.
 
 **Standard line 2:** `POWER ` (`d`) + power value `NN.NN W` (`pw`) + space + power bar (width 18 at 80 columns, plus one per extra column; fraction = P / 150 W, style `pw`) + ` of 150 W   Vin ` (`d`) + input voltage (`tx`) + `  T ` (`d`) + temperature (`tx`).
 
@@ -422,7 +422,7 @@ Which badge is lit: output ON and mode CV → CV lit; output ON and mode CC → 
 
 ### 6.5 Memory (preset) row
 
-- **Standard:** one row below the Status box, no border: six buttons, each a key cap ` M1 ` plus ` 3.3/1 ` (`d`) and one space, then the hint `m 1-6 recall` (`d`) right-aligned to the right edge of the terminal. The button whose V and I equal the current setpoints exactly is drawn in `sel` instead of `d`. A button whose V or I exceeds the live maximum is drawn in `wn`, with a `!` in place of the key cap's leading space (`!M6`), so it is readable with colour off. No button is highlighted when none matches. [D]
+- **Standard:** one row below the Status box, no border: six buttons, each a key cap ` M1 ` plus ` 3.3/1 ` (`d`) and one space, then the hint `m 1-6 recall` (`d`) right-aligned with one blank cell after it (as after a key bar item). The button whose V and I equal the current setpoints exactly is drawn in `sel` instead of `d`. A button whose V or I exceeds the live maximum is drawn in `wn`, with a `!` in place of the key cap's leading space (`!M6`), so it is readable with colour off. No button is highlighted when none matches. [D]
 - **Large:** a box `Memory` (width 100, right text `m 1-6 recall` in `d`) with one inner line of six buttons: ` M1 ` key cap + ` 3.3V/1.0A` + two spaces. The same match highlight (`sel`) and blocked styling (`wn`, `!M6`) apply.
 - **Compact:** no preset row; presets are on the Presets screen and the `m` chord.
 - The hint says `m 1-6`, never just `1-6`: bare digits start typed entry (§7.2).

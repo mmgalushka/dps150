@@ -42,7 +42,7 @@ tests/
 
 - **Dependencies point one way:** `protocol` ← `device` ← `app` ← `ui` ← `dps150`. `simulator` depends only on `protocol`; no production crate depends on it, and `dps150-sim` is excluded from release artifacts.
 - **Shared test data stays at the root.** `tests/fixtures/` and `tests/golden/` are used by several crates, so tests locate them relative to the workspace root (for example `env!("CARGO_MANIFEST_DIR")/../../tests/golden`); they are never copied into a crate.
-- **Cross-crate and pty tests** (levels 1 and 2 of §4) live in the root package's `tests/*.rs`; unit tests stay in their crate.
+- **Cross-crate and pty tests** (levels 1 and 2 of §4) live in the root package's `tests/*.rs` (`tests/device_pty.rs`: the device thread; `tests/app_pty.rs`: the `dps150` binary in a pty, drawn into a `vt100` emulator); unit tests stay in their crate.
 - **`.gitignore` allowlist.** A new file type or directory needs its `!` rule in the same commit that adds the file (CONTRIBUTING.md).
 
 ## 3. Build prerequisites
