@@ -48,12 +48,15 @@ name = "device"
 version = "0.0.0"
 dependencies = [
  "protocol",
+ "serialport",
+ "simulator",
 ]
 
 [[package]]
 name = "dps150"
 version = "0.0.0"
 dependencies = [
+ "device",
  "serialport",
  "ui",
 ]

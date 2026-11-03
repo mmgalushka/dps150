@@ -30,3 +30,4 @@ ui.workspace = true
 
 [dev-dependencies]
 serialport = "4.10.1"
+device.workspace = true

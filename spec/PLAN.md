@@ -93,6 +93,7 @@ A supervised session with the user at the unit, driven by `hw_probe`. Every writ
 - The pure link state machine, then the thread and serial transport. In this stage it has no write path except the connect frame and GET.
 - Requirements: PRT-01, PRT-06, LNK-01, LNK-06, APP-01, APP-02, APP-08, APP-10, APP-11.
 - *Exit:* level 1 tests against `SimDevice` and level 2 against `dps150-sim` pass, including `unplug`, `close`, `corrupt`, `split` and `delay`.
+- **Status:** done 2026-11-03 on branch `m3/device-core`: `Link` (pure core), `Device` (thread and serial transport), `constants`, 19 level 1 tests (`crates/device/tests/link.rs`) and 8 level 2 tests (`tests/device_pty.rs`, Linux only). The quiet-tick rule of SAF-15 is implemented but cannot be exercised until the first SET exists (M5).
 
 ### M4. Read-only monitor (stage 1)
 - `dps150` binary, CLI and port resolution, config reading, model, terminal setup and restore, tier selection, fonts, header, strip, readouts and status for the main panel at all tiers.
