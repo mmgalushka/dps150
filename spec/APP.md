@@ -93,6 +93,12 @@ The `device` layer owns the link. States and transitions:
 - **Model.** The UI/app thread owns one model snapshot; the renderer reads only that snapshot (§2).
 - **Output OFF has priority.** An output-OFF command (`Space`, `Ctrl-X`, a prompt cancel) goes to the front of the queue, bypasses the 50 ms SET coalescing (DESIGN.md §7.1, `SAF-07`) and is never dropped or merged away. While the link is down it becomes the queued OFF of SAFETY.md §3.1. {#APP-09}
 
+### 7.1 Interface of the device crate
+
+- `Link` is the core of §5: `wants_open`, `port_opened`, `open_failed`, `io_error`, `feed(now, bytes)`, `poll(now) -> bytes`, `take_events`, `snapshot`, `request_reconnect`. It writes only the connect frame and GETs until the write path exists.
+- `Device::start(port, config)` opens the port, runs the handshake and returns once the first full dump has arrived, or fails with the `StartupError` whose `Display` is the stderr message of APP-01. After that, `Device::messages()` carries `Message::Event` (`Online { restored }`, `Lost`) and `Message::Model` (a new snapshot whenever it changes); `Device::send(Command)` takes `Reconnect`, `Refresh`, `AutoReconnect`. Dropping the `Device` stops the thread and sends nothing.
+- A failed retry while `Lost` raises no new `Lost` event. The first poll comes one period after the first dump. Pushed frames patch the last dump (`C0`, `C3`, `C4`, `E2`, `E3`); they never answer a poll.
+
 ## 8. Unverified constants [U]
 
 Every value that depends on device behaviour nobody has observed lives in one module, `constants`, one named item each, so a hardware session changes one line and no logic. The simulator uses the same values (SIMULATOR.md §6). {#APP-10}
