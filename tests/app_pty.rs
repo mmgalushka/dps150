@@ -345,13 +345,16 @@ const SHOW_CURSOR: &str = "\x1b[?25h";
 fn prt_05_the_main_panel_shows_the_device_and_changes_no_setting() {
     let sim = Sim::start();
     let mut tui = Tui::start(&sim, &[]);
-    tui.wait_for("connected");
-    let screen = tui.contents();
-    assert!(screen.contains("DPS-150 · fw V1.2"), "{screen}");
-    assert!(screen.contains("▸ VOLTAGE"));
-    assert!(screen.contains("OUTPUT  OFF"));
-    assert!(screen.contains("Space  output"));
-    // Set values of the simulator's initial state: 3.30 V / 2.000 A.
+    // A frame arrives in several writes, so wait for each part of it.
+    for text in [
+        "connected",
+        "DPS-150 · fw V1.2",
+        "▸ VOLTAGE",
+        "OUTPUT  OFF",
+        "Space  output",
+    ] {
+        tui.wait_for(text);
+    }
     tui.send(b"q");
     assert_eq!(tui.wait_exit(), 0);
 }
@@ -419,12 +422,7 @@ fn ui_12_resize_reevaluates_the_tier_and_keeps_the_state() {
         .args(["-WINCH", &pid])
         .status()
         .unwrap();
-    tui.wait_for("CURRENT (A)");
-    assert!(
-        tui.contents().contains("▸ CURRENT (A)"),
-        "focus kept: {}",
-        tui.contents()
-    );
+    tui.wait_for("▸ CURRENT (A)"); // the focus is kept
     tui.send(b"q");
     assert_eq!(tui.wait_exit(), 0);
 }
@@ -435,15 +433,16 @@ fn lnk_02_loss_shows_dashes_and_unknown_output_and_restore_brings_the_numbers_ba
     let mut tui = Tui::start(&sim, &[]);
     tui.wait_for("connected");
     sim.command("unplug");
-    tui.wait_for("no link");
+    for text in [
+        "no link",
+        "Output state unknown, may still be ON",
+        "OUTPUT  ?",
+        "? OVP",
+        "╺━╸", // measured digits are dashes
+    ] {
+        tui.wait_for(text);
+    }
     let screen = tui.contents();
-    assert!(
-        screen.contains("Output state unknown, may still be ON"),
-        "{screen}"
-    );
-    assert!(screen.contains("OUTPUT  ?"));
-    assert!(screen.contains("? OVP"));
-    assert!(screen.contains("╺━╸"), "measured digits are dashes");
     assert!(
         !screen.contains("2.56 W") && !screen.contains("0.00 W"),
         "no stale power"
@@ -451,7 +450,7 @@ fn lnk_02_loss_shows_dashes_and_unknown_output_and_restore_brings_the_numbers_ba
     sim.command("plug");
     tui.wait_for("connected");
     tui.gone("no link");
-    assert!(tui.contents().contains("OUTPUT  OFF"));
+    tui.wait_for("OUTPUT  OFF");
     tui.send(b"q");
     assert_eq!(tui.wait_exit(), 0);
 }
@@ -481,7 +480,7 @@ fn ui_01_a_terminal_below_the_floor_shows_the_too_small_screen() {
     let sim = Sim::start();
     let mut tui = Tui::start_sized(&sim, &[], 15, 43);
     tui.wait_for("Terminal too small");
-    assert!(tui.contents().contains("need 44×16, have 43×15"));
+    tui.wait_for("need 44×16, have 43×15");
     tui.send(&[0x03]);
     assert_eq!(tui.wait_exit(), 0);
 }
