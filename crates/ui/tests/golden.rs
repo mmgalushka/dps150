@@ -913,3 +913,67 @@ fn lim_05_the_protection_edit_box_flags_an_invalid_candidate_and_a_maximum_defau
     );
     assert!(lines.iter().any(|l| l.contains("✓ OCP stays above it")));
 }
+
+// ---- quit prompts (SAF-11) ---------------------------------------------------------------
+
+#[test]
+fn saf_11_the_quit_prompt_shows_its_own_answers_not_yes_and_no() {
+    let mut model = model_with(example_dump(), PORT);
+    model.on_key(Key::Char('q'));
+    let lines = draw(&model, 80, 24);
+    let row = lines
+        .iter()
+        .find(|l| l.contains("Quit with output ON"))
+        .expect("the question");
+    assert!(
+        row.contains("Quit with output ON (5.00 V)?   y  quit   o  off+quit   Esc  stay"),
+        "{row}"
+    );
+    assert!(!row.contains("yes"));
+    let lines = draw(&model, 44, 16);
+    let row = lines
+        .iter()
+        .find(|l| l.contains("Leave ON?"))
+        .expect("the question");
+    assert!(
+        row.contains("Leave ON?   y  quit   o  off   Esc  stay"),
+        "{row}"
+    );
+    assert!(row.chars().count() <= 44, "fits the Compact row: {row}");
+}
+
+#[test]
+fn saf_11_the_link_down_quit_prompt_has_only_quit_and_stay() {
+    let mut model = lost(model_with(example_dump(), PORT));
+    model.on_key(Key::Char('q'));
+    let lines = draw(&model, 80, 24);
+    let row = lines
+        .iter()
+        .find(|l| l.contains("Quit anyway?"))
+        .expect("the question");
+    assert!(
+        row.contains("Link down: cannot turn output off. Quit anyway?   y  quit   Esc  stay"),
+        "{row}"
+    );
+    assert!(!row.contains("off+quit"));
+    let lines = draw(&model, 44, 16);
+    let row = lines
+        .iter()
+        .find(|l| l.contains("Link down. Quit?"))
+        .unwrap();
+    assert!(row.contains("y  quit   Esc  stay"), "{row}");
+}
+
+#[test]
+fn saf_11_the_quit_prompt_replaces_the_key_bar_on_a_secondary_screen_too() {
+    // `q` on a secondary screen goes back; the prompt is only on the main panel.
+    let mut model = named(model_with(example_dump(), PORT));
+    model.on_key(Key::Char('p'));
+    model.on_key(Key::Char('q'));
+    model.on_key(Key::Char('q'));
+    assert!(
+        draw(&model, 80, 24)
+            .iter()
+            .any(|l| l.contains("Quit with output ON"))
+    );
+}

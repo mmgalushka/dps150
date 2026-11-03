@@ -30,6 +30,9 @@ pub enum Command {
     AutoReconnect(bool),
     /// A setpoint, preset or limit write. The core checks it again (APP-12).
     Write(Setting),
+    /// Quit: send what is queued, then the close frame (SAF-14). The thread
+    /// answers with `Event::Closed`.
+    Close,
 }
 
 /// Device thread to UI.
@@ -181,6 +184,7 @@ fn run(
                 Command::AutoReconnect(on) => link.set_reconnect(on),
                 // A refusal comes back as an event.
                 Command::Write(write) => drop(link.write(write)),
+                Command::Close => link.close(),
             }
         }
 

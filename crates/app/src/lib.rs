@@ -13,6 +13,7 @@ mod output;
 mod port;
 pub mod protection;
 mod screens;
+mod shutdown;
 
 pub use cli::{Cli, parse_args};
 pub use config::{ColorSetting, Config, Loaded, OnExit, OutputOn, config_path, load_config};
@@ -24,6 +25,7 @@ pub use screens::{
     Blocked, CLEARED, PresetEdit, PresetMode, PresetsState, Prompt, ProtectionEdit, ProtectionMode,
     ProtectionState, Screen, Typed,
 };
+pub use shutdown::{Action, Facts, Outcome, Shutdown};
 
 pub mod locale {
     //! UTF-8 check (UI-10).

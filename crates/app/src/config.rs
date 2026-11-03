@@ -83,6 +83,7 @@ impl Config {
         };
         crate::output::Safety {
             ask_on: self.output_on == OutputOn::Ask,
+            on_exit_off: self.on_exit == OnExit::Off,
             v_jump: milli(self.v_jump),
             i_jump: milli(self.i_jump),
         }
@@ -194,6 +195,7 @@ mod tests {
     fn saf_03_the_safety_settings_become_thresholds_in_thousandths() {
         let safety = Config::default().safety();
         assert!(safety.ask_on);
+        assert!(!safety.on_exit_off);
         assert_eq!((safety.v_jump, safety.i_jump), (5_000, 2_000));
         let loaded = parse_config("output_on = \"immediate\"\nv_jump = 0\ni_jump = 0.25\n");
         let safety = loaded.config.safety();

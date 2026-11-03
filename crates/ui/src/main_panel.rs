@@ -59,6 +59,8 @@ pub(crate) struct View {
     pub(crate) message: Option<(String, Tone)>,
     /// A question waiting for `y` or `n` (§5.12).
     pub(crate) prompt: Option<String>,
+    /// The answers it offers, as key caps.
+    pub(crate) prompt_keys: Vec<(&'static str, &'static str)>,
     /// The protection that tripped, as its name (`OTP`).
     pub(crate) trip: Option<&'static str>,
     pub(crate) focus: Focus,
@@ -122,6 +124,7 @@ impl View {
                 .map(|entry| (entry.focus, entry.text.clone(), entry.rejected)),
             message: model.message(compact).map(|line| (line.text, line.tone)),
             prompt: model.prompt_text(compact),
+            prompt_keys: model.prompt_keys(compact),
             trip: model.tripped().filter(|_| online).map(|limit| limit.name()),
             focus: model.focus,
             cursors: [model.cursor(Focus::Voltage), model.cursor(Focus::Current)],
@@ -354,9 +357,15 @@ pub(crate) fn message_style(tone: Tone) -> S {
 }
 
 /// The question and its answers (§5.12): `Turn output ON at …?   y  yes   Esc  no`.
-pub(crate) fn draw_prompt(p: &mut Painter, x: u16, y: u16, text: &str) {
+pub(crate) fn draw_prompt(
+    p: &mut Painter,
+    x: u16,
+    y: u16,
+    text: &str,
+    keys: &[(&'static str, &'static str)],
+) {
     let column = p.text(x, y, &format!("{text}  "), S::Wn);
-    draw_key_items(p, column, y, &[("y", "yes"), ("Esc", "no")]);
+    draw_key_items(p, column, y, keys);
 }
 
 /// The tripped message (§6.7): `OTP tripped  output forced off ·  Space  clear`,
@@ -429,7 +438,7 @@ fn compact(p: &mut Painter, view: &View, area: Rect) {
     // A question comes first, then a transient message, which replaces the
     // standing text for its three seconds.
     if let Some(prompt) = &view.prompt {
-        draw_prompt(p, x0 + 1, info_y, prompt);
+        draw_prompt(p, x0 + 1, info_y, prompt, &view.prompt_keys);
     } else if let Some((text, tone)) = &view.message {
         p.text(x0 + 1, info_y, text, message_style(*tone));
     } else if !view.online {
@@ -664,7 +673,7 @@ fn fluid_status(p: &mut Painter, view: &View, rect: Rect, tier: Tier) {
     // Line 2. A question comes first; a transient message replaces the
     // standing text (§5.12).
     if let Some(prompt) = &view.prompt {
-        draw_prompt(p, x, y2, prompt);
+        draw_prompt(p, x, y2, prompt, &view.prompt_keys);
         return;
     }
     if let Some((text, tone)) = &view.message {

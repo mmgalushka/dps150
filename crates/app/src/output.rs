@@ -17,6 +17,8 @@ use crate::screens::Prompt;
 pub struct Safety {
     /// "Output on = ask first" (the default) or "immediately".
     pub ask_on: bool,
+    /// Settings → On exit = turn off (default: leave the output as it is).
+    pub on_exit_off: bool,
     /// Voltage jump threshold in mV; 0 turns the prompt off.
     pub v_jump: u32,
     /// Current jump threshold in mA; 0 turns the prompt off.
@@ -27,6 +29,7 @@ impl Default for Safety {
     fn default() -> Self {
         Self {
             ask_on: true,
+            on_exit_off: false,
             v_jump: 5_000,
             i_jump: 2_000,
         }
@@ -369,6 +372,7 @@ impl Model {
                 ])
             }
             Prompt::Overwrite { .. } | Prompt::Clear { .. } => return None,
+            Prompt::QuitOn { .. } | Prompt::QuitLinkDown => Effect::Quit,
         })
     }
 
@@ -432,7 +436,70 @@ impl Model {
                     format!("Recall M{} {v} V / {a} A, output ON?", slot + 1)
                 }
             }
+            Prompt::QuitOn { voltage } => {
+                if compact {
+                    "Leave ON?".to_string()
+                } else {
+                    format!("Quit with output ON ({} V)?", two_decimals(*voltage))
+                }
+            }
+            Prompt::QuitLinkDown => {
+                if compact {
+                    "Link down. Quit?".to_string()
+                } else {
+                    "Link down: cannot turn output off. Quit anyway?".to_string()
+                }
+            }
             Prompt::Overwrite { .. } | Prompt::Clear { .. } => return None,
         })
+    }
+
+    /// The answers a prompt offers, as key caps (§5.12, §10).
+    pub fn prompt_keys(&self, compact: bool) -> Vec<(&'static str, &'static str)> {
+        match self.prompt {
+            Some(Prompt::QuitOn { .. }) if compact => {
+                vec![("y", "quit"), ("o", "off"), ("Esc", "stay")]
+            }
+            Some(Prompt::QuitOn { .. }) => vec![("y", "quit"), ("o", "off+quit"), ("Esc", "stay")],
+            Some(Prompt::QuitLinkDown) => vec![("y", "quit"), ("Esc", "stay")],
+            _ => vec![("y", "yes"), ("Esc", "no")],
+        }
+    }
+
+    // ---- quitting ----------------------------------------------------------------------
+
+    /// `q`: quit at once, or ask first when that would leave the output ON or
+    /// when the device cannot be reached (SAF-11).
+    pub(crate) fn request_quit(&mut self) -> Effect {
+        if !self.is_online() {
+            self.prompt = Some(Prompt::QuitLinkDown);
+            return Effect::None;
+        }
+        if self.output_is_on() && !self.safety.on_exit_off {
+            let voltage = self.set_voltage().map_or(0, |v| v.get());
+            self.prompt = Some(Prompt::QuitOn { voltage });
+            return Effect::None;
+        }
+        Effect::Quit
+    }
+
+    /// Starts the quit sequence from the state on screen. `force_off` is the
+    /// `o` answer; otherwise Settings → On exit decides (SAF-11, SAF-14).
+    pub fn begin_shutdown(
+        &self,
+        now: std::time::Duration,
+        force_off: bool,
+    ) -> (crate::shutdown::Shutdown, Vec<crate::shutdown::Action>) {
+        let (voltage, current) = self.shown().unwrap_or((0, 0));
+        crate::shutdown::Shutdown::start(
+            now,
+            crate::shutdown::Facts {
+                online: self.is_online(),
+                output_on: self.output_is_on(),
+                voltage,
+                current,
+                off: force_off || self.safety.on_exit_off,
+            },
+        )
     }
 }

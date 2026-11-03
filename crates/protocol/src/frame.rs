@@ -108,6 +108,18 @@ impl Frame {
         }
     }
 
+    /// `F1 C1 00 01 00 01`: closes the session, releases the front-panel lock
+    /// and silences the device (SAF-14, PROTOCOL.md §7.8). Nothing may follow
+    /// it for `SET_GAP`, or the device drops it (§7.7).
+    pub fn close() -> Self {
+        Self {
+            dir: Dir::HostToDevice,
+            command: command::CONNECT,
+            id: 0,
+            data: vec![0],
+        }
+    }
+
     pub fn dir(&self) -> Dir {
         self.dir
     }
@@ -164,6 +176,14 @@ mod tests {
         assert_eq!(
             Frame::connect().encode(),
             [0xF1, 0xC1, 0x00, 0x01, 0x01, 0x02]
+        );
+    }
+
+    #[test]
+    fn saf_14_the_close_frame_is_the_documented_bytes() {
+        assert_eq!(
+            Frame::close().encode(),
+            [0xF1, 0xC1, 0x00, 0x01, 0x00, 0x01]
         );
     }
 

@@ -460,7 +460,7 @@ fn saf_06_a_threshold_of_zero_turns_that_prompt_off() {
     model.set_safety(Safety {
         v_jump: 0,
         i_jump: 2_000,
-        ask_on: true,
+        ..Safety::default()
     });
     type_text(&mut model, "20");
     assert_eq!(model.on_key(Key::Enter), Effect::Write(volts(20_000)));
@@ -835,4 +835,199 @@ fn saf_01_a_refused_on_behind_an_off_is_explained() {
         why: device::Refusal::OffPending,
     }));
     assert_eq!(text(&model, false), "Output OFF is still pending");
+}
+
+// ---- quitting (SAF-11) ---------------------------------------------------------------------
+
+#[test]
+fn saf_11_q_with_the_output_off_quits_at_once() {
+    let mut model = off();
+    assert_eq!(model.on_key(Key::Char('q')), Effect::Quit);
+    assert!(model.prompt().is_none());
+}
+
+#[test]
+fn saf_11_q_with_the_output_on_asks_with_the_voltage_and_three_answers() {
+    let mut model = on();
+    assert_eq!(model.on_key(Key::Char('q')), Effect::None);
+    assert!(matches!(model.prompt(), Some(Prompt::QuitOn { .. })));
+    assert_eq!(
+        model.prompt_text(false).unwrap(),
+        "Quit with output ON (5.00 V)?"
+    );
+    assert_eq!(model.prompt_text(true).unwrap(), "Leave ON?");
+    assert_eq!(
+        model.prompt_keys(false),
+        [("y", "quit"), ("o", "off+quit"), ("Esc", "stay")]
+    );
+    assert_eq!(
+        model.prompt_keys(true),
+        [("y", "quit"), ("o", "off"), ("Esc", "stay")]
+    );
+}
+
+#[test]
+fn saf_11_y_quits_leaving_it_on_o_turns_it_off_and_quits_esc_stays() {
+    let mut model = on();
+    model.on_key(Key::Char('q'));
+    assert_eq!(model.on_key(Key::Char('y')), Effect::Quit);
+    let mut model = on();
+    model.on_key(Key::Char('q'));
+    assert_eq!(model.on_key(Key::Char('o')), Effect::QuitOff);
+    for stay in [Key::Esc, Key::Char('n')] {
+        let mut model = on();
+        model.on_key(Key::Char('q'));
+        assert_eq!(model.on_key(stay), Effect::None, "{stay:?}");
+        assert!(model.prompt().is_none());
+    }
+}
+
+#[test]
+fn saf_11_enter_and_other_keys_do_not_answer_the_quit_prompt() {
+    for key in [
+        Key::Enter,
+        Key::Char('x'),
+        Key::Char('q'),
+        Key::Up,
+        Key::Tab,
+    ] {
+        let mut model = on();
+        model.on_key(Key::Char('q'));
+        assert_eq!(model.on_key(key), Effect::None, "{key:?}");
+        assert!(model.prompt().is_some(), "{key:?} must not dismiss it");
+    }
+}
+
+#[test]
+fn saf_11_o_is_only_an_answer_to_the_quit_prompt() {
+    let mut model = off();
+    model.on_key(Key::Char(' '));
+    assert!(matches!(model.prompt(), Some(Prompt::OutputOn { .. })));
+    assert_eq!(
+        model.on_key(Key::Char('o')),
+        Effect::None,
+        "no quit from the ON question"
+    );
+    assert!(model.prompt().is_some());
+}
+
+#[test]
+fn saf_05_space_at_the_quit_prompt_cancels_it_and_turns_the_output_off() {
+    let mut model = on();
+    model.on_key(Key::Char('q'));
+    assert_eq!(model.on_key(Key::Char(' ')), Effect::Write(out(false)));
+    assert!(model.prompt().is_none());
+}
+
+#[test]
+fn saf_11_with_on_exit_turn_off_q_quits_without_a_prompt() {
+    let mut model = on();
+    model.set_safety(Safety {
+        on_exit_off: true,
+        ..Safety::default()
+    });
+    assert_eq!(model.on_key(Key::Char('q')), Effect::Quit);
+    assert!(model.prompt().is_none());
+}
+
+#[test]
+fn saf_11_with_the_link_down_q_asks_and_only_y_quits() {
+    let mut model = on();
+    lost(&mut model);
+    assert_eq!(model.on_key(Key::Char('q')), Effect::None);
+    assert!(matches!(model.prompt(), Some(Prompt::QuitLinkDown)));
+    assert_eq!(
+        model.prompt_text(false).unwrap(),
+        "Link down: cannot turn output off. Quit anyway?"
+    );
+    assert_eq!(model.prompt_text(true).unwrap(), "Link down. Quit?");
+    assert_eq!(model.prompt_keys(false), [("y", "quit"), ("Esc", "stay")]);
+    assert_eq!(
+        model.on_key(Key::Char('o')),
+        Effect::None,
+        "there is no off+quit here"
+    );
+    assert_eq!(model.on_key(Key::Char('y')), Effect::Quit);
+    let mut model = on();
+    lost(&mut model);
+    model.on_key(Key::Char('q'));
+    assert_eq!(model.on_key(Key::Esc), Effect::None);
+    assert!(model.prompt().is_none());
+}
+
+#[test]
+fn saf_11_ctrl_c_quits_at_once_without_a_prompt_wherever_it_is() {
+    for setup in [on(), off()] {
+        let mut model = setup;
+        assert_eq!(model.on_key(Key::CtrlC), Effect::Quit);
+        assert!(model.prompt().is_none());
+    }
+    let mut model = on();
+    lost(&mut model);
+    assert_eq!(
+        model.on_key(Key::CtrlC),
+        Effect::Quit,
+        "even with the link down"
+    );
+    let mut model = on();
+    model.on_key(Key::Char('q')); // a prompt is open
+    assert_eq!(model.on_key(Key::CtrlC), Effect::Quit);
+    let mut model = on();
+    model.on_key(Key::Enter);
+    assert_eq!(model.on_key(Key::CtrlC), Effect::Quit, "in typed entry");
+}
+
+#[test]
+fn saf_10_on_the_too_small_screen_q_is_ignored_and_ctrl_c_quits() {
+    let mut model = on();
+    model.set_too_small(true);
+    assert_eq!(model.on_key(Key::Char('q')), Effect::None);
+    assert!(model.prompt().is_none());
+    assert_eq!(model.on_key(Key::CtrlC), Effect::Quit);
+}
+
+#[test]
+fn saf_11_q_on_a_secondary_screen_goes_back_and_never_quits() {
+    let mut model = on();
+    model.on_key(Key::Char('p'));
+    assert_eq!(model.on_key(Key::Char('q')), Effect::None);
+    assert_eq!(model.screen(), app::Screen::Main);
+    assert!(model.prompt().is_none());
+    // A second q is the main panel's q.
+    model.on_key(Key::Char('q'));
+    assert!(matches!(model.prompt(), Some(Prompt::QuitOn { .. })));
+}
+
+#[test]
+fn saf_11_q_in_typed_entry_is_ignored() {
+    let mut model = on();
+    model.on_key(Key::Enter);
+    assert_eq!(model.on_key(Key::Char('q')), Effect::None);
+    assert!(model.prompt().is_none());
+    assert!(model.entry().is_some());
+}
+
+#[test]
+fn saf_11_the_shutdown_starts_from_the_state_on_screen() {
+    use app::Action;
+    // Leave: no OFF, then the close.
+    let (_, actions) = on().begin_shutdown(std::time::Duration::ZERO, false);
+    assert_eq!(actions, [Action::Close]);
+    // The `o` answer: OFF first.
+    let (_, actions) = on().begin_shutdown(std::time::Duration::ZERO, true);
+    assert_eq!(actions, [Action::Write(out(false))]);
+    // On exit = turn off, with no key: the same.
+    let mut model = on();
+    model.set_safety(Safety {
+        on_exit_off: true,
+        ..Safety::default()
+    });
+    let (_, actions) = model.begin_shutdown(std::time::Duration::ZERO, false);
+    assert_eq!(actions, [Action::Write(out(false))]);
+    // Link down: nothing can be sent.
+    let mut model = on();
+    lost(&mut model);
+    let (shutdown, actions) = model.begin_shutdown(std::time::Duration::ZERO, false);
+    assert!(actions.is_empty());
+    assert!(shutdown.finished().is_some());
 }

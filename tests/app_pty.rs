@@ -1162,3 +1162,268 @@ fn saf_09_a_prompt_is_cancelled_when_the_terminal_becomes_too_small() {
     tui.send(&[0x03]);
     assert_eq!(tui.wait_exit(), 0);
 }
+
+// ---- quitting and closing the session -------------------------------------------------------
+
+/// What the program wrote after it left the alternate screen, escape
+/// sequences removed: the last thing it wrote (SAF-11).
+fn after_leaving(raw: &str) -> String {
+    let tail = raw.rsplit(LEAVE_ALT).next().unwrap_or("");
+    let mut text = String::new();
+    let mut chars = tail.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' {
+            // CSI: skip to the final byte.
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                for next in chars.by_ref() {
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            text.push(ch);
+        }
+    }
+    text.trim().replace("\r\n", "\n")
+}
+
+fn kill(signal: &str, tui: &Tui) {
+    Command::new("kill")
+        .args([signal, &tui.child.id().to_string()])
+        .status()
+        .unwrap();
+}
+
+#[test]
+fn saf_14_q_with_the_output_off_quits_at_once_and_closes_the_session() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    assert_eq!(
+        sim.state()["locked"],
+        "true",
+        "the connect frame locked the panel"
+    );
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+    assert_eq!(after_leaving(&tui.raw_text()), "", "nothing is printed");
+    let state = sim.state();
+    assert_eq!(
+        state["locked"], "false",
+        "the close frame released the panel"
+    );
+    assert_eq!(state["connected"], "false");
+    assert_eq!(state["dropped"], "0", "the device kept the close frame");
+}
+
+#[test]
+fn saf_11_q_with_the_output_on_asks_and_esc_stays() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    tui.send(b"q");
+    tui.wait_for("Quit with output ON (3.30 V)?");
+    tui.wait_for("y  quit");
+    tui.wait_for("o  off+quit");
+    tui.send(b"\x1b");
+    thread::sleep(Duration::from_millis(300));
+    tui.gone("Quit with output ON");
+    assert!(tui.child.try_wait().unwrap().is_none(), "still running");
+    assert_eq!(sim.state()["locked"], "true");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_11_y_quits_leaving_the_output_on_and_says_so_last() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    tui.send(b"q");
+    tui.wait_for("Quit with output ON");
+    tui.send(b"y");
+    assert_eq!(tui.wait_exit(), 0);
+    assert_eq!(
+        after_leaving(&tui.raw_text()),
+        "dps150: output left ON (3.30 V / 2.000 A)"
+    );
+    let state = sim.state();
+    assert_eq!(state["output"], "on", "left as it was");
+    assert_eq!(state["locked"], "false", "but the panel is released");
+}
+
+#[test]
+fn saf_11_o_turns_the_output_off_waits_for_the_read_back_and_then_quits() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    tui.send(b"q");
+    tui.wait_for("Quit with output ON");
+    tui.send(b"o");
+    assert_eq!(tui.wait_exit(), 0);
+    assert_eq!(after_leaving(&tui.raw_text()), "dps150: output turned OFF");
+    let state = sim.state();
+    assert_eq!(state["output"], "off");
+    assert_eq!(state["locked"], "false");
+    assert_eq!(state["dropped"], "0");
+}
+
+#[test]
+fn saf_11_with_on_exit_turn_off_q_turns_it_off_without_asking() {
+    let dir = config_dir("onexit", &[("config.toml", "on_exit = \"off\"\n")]);
+    let xdg = dir.to_str().unwrap().to_string();
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[("XDG_CONFIG_HOME", &xdg)]);
+    tui.wait_for("OUTPUT  ON");
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+    assert!(
+        !tui.raw_text().contains("Quit with output ON"),
+        "no question"
+    );
+    assert_eq!(after_leaving(&tui.raw_text()), "dps150: output turned OFF");
+    assert_eq!(sim.state()["output"], "off");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn saf_11_ctrl_c_follows_the_setting_without_asking() {
+    // Default: leave.
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+    assert_eq!(
+        after_leaving(&tui.raw_text()),
+        "dps150: output left ON (3.30 V / 2.000 A)"
+    );
+    assert_eq!(sim.state()["output"], "on");
+    // On exit = turn off.
+    let dir = config_dir("ctrlc", &[("config.toml", "on_exit = \"off\"\n")]);
+    let xdg = dir.to_str().unwrap().to_string();
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[("XDG_CONFIG_HOME", &xdg)]);
+    tui.wait_for("OUTPUT  ON");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+    assert_eq!(after_leaving(&tui.raw_text()), "dps150: output turned OFF");
+    assert_eq!(sim.state()["output"], "off");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn saf_11_sigterm_and_sighup_quit_without_a_prompt_and_close_the_session() {
+    for signal in ["-TERM", "-HUP"] {
+        let mut sim = Sim::start();
+        sim.command("panel on");
+        let mut tui = Tui::start(&sim, &[]);
+        tui.wait_for("OUTPUT  ON");
+        kill(signal, &tui);
+        assert_eq!(tui.wait_exit(), 0, "{signal}");
+        assert_eq!(
+            after_leaving(&tui.raw_text()),
+            "dps150: output left ON (3.30 V / 2.000 A)",
+            "{signal}"
+        );
+        assert!(!tui.raw_text().contains("Quit with output ON"), "{signal}");
+        assert_eq!(sim.state()["locked"], "false", "{signal}: released");
+    }
+}
+
+#[test]
+fn saf_11_sigterm_turns_the_output_off_when_the_setting_says_so() {
+    let dir = config_dir("sigterm", &[("config.toml", "on_exit = \"off\"\n")]);
+    let xdg = dir.to_str().unwrap().to_string();
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[("XDG_CONFIG_HOME", &xdg)]);
+    tui.wait_for("OUTPUT  ON");
+    kill("-TERM", &tui);
+    assert_eq!(tui.wait_exit(), 0);
+    assert_eq!(after_leaving(&tui.raw_text()), "dps150: output turned OFF");
+    assert_eq!(sim.state()["output"], "off");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn saf_11_an_off_that_cannot_be_confirmed_exits_1_and_still_releases_the_panel() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    sim.command("keep DB 1"); // the device keeps the output on
+    tui.send(b"q");
+    tui.wait_for("Quit with output ON");
+    tui.send(b"o");
+    assert_eq!(tui.wait_exit(), 1);
+    assert_eq!(
+        after_leaving(&tui.raw_text()),
+        "dps150: could not confirm output OFF, check the unit"
+    );
+    let state = sim.state();
+    assert_eq!(state["output"], "on");
+    assert_eq!(state["locked"], "false", "so the panel button works");
+}
+
+#[test]
+fn saf_11_with_the_link_down_q_asks_and_y_quits_saying_the_state_is_unknown() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    sim.command("unplug");
+    tui.wait_for("no link");
+    tui.send(b"q");
+    tui.wait_for("Link down: cannot turn output off. Quit anyway?");
+    tui.send(b"\x1b");
+    thread::sleep(Duration::from_millis(300));
+    assert!(tui.child.try_wait().unwrap().is_none());
+    tui.send(b"q");
+    tui.wait_for("Quit anyway?");
+    tui.send(b"y");
+    assert_eq!(tui.wait_exit(), 0);
+    assert_eq!(
+        after_leaving(&tui.raw_text()),
+        "dps150: link lost, output state unknown"
+    );
+    assert_eq!(sim.state()["output"], "on", "nothing could be sent");
+}
+
+#[test]
+fn saf_14_the_last_write_is_sent_before_the_session_is_closed() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(UP);
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+    let state = sim.state();
+    assert_eq!(state["vset"], "4.3", "the write was not lost");
+    assert_eq!(state["locked"], "false");
+    assert_eq!(
+        state["dropped"], "0",
+        "the gap held between the write and the close"
+    );
+}
+
+#[test]
+fn saf_11_on_the_too_small_screen_only_ctrl_c_quits_and_it_closes_the_session() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start_sized(&sim, &[], 15, 43);
+    tui.wait_for("Terminal too small");
+    tui.send(b"q");
+    thread::sleep(Duration::from_millis(300));
+    assert!(tui.child.try_wait().unwrap().is_none(), "q is ignored");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+    assert_eq!(sim.state()["locked"], "false");
+}

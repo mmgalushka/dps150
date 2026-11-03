@@ -108,6 +108,12 @@ pub enum Prompt {
         voltage: u32,
         current: u32,
     },
+    /// `q` with the output ON and On exit = leave (SAF-11).
+    QuitOn {
+        voltage: u32,
+    },
+    /// `q` while the link is down: the output cannot be turned off.
+    QuitLinkDown,
 }
 
 impl Default for PresetsState {
@@ -650,8 +656,14 @@ impl Model {
                         self.names_changed();
                         self.write_slot(slot, CLEARED.0, CLEARED.1)
                     }
+                    Prompt::QuitOn { .. } | Prompt::QuitLinkDown => Effect::Quit,
                     other => self.confirm_output_prompt(&other).unwrap_or(Effect::None),
                 }
+            }
+            // `o` at the quit prompt: turn the output off, then quit.
+            Key::Char('o') | Key::Char('O') if matches!(prompt, Prompt::QuitOn { .. }) => {
+                self.prompt = None;
+                Effect::QuitOff
             }
             Key::Char('n') | Key::Char('N') | Key::Esc => {
                 self.prompt = None;
