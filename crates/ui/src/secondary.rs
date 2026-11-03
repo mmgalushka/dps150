@@ -56,7 +56,7 @@ pub(crate) fn draw(p: &mut Painter, model: &Model, area: Rect, tier: Tier) {
 
 // ---- strip (§5.10) --------------------------------------------------------------
 
-fn strip(p: &mut Painter, view: &View, area: Rect, x0: u16, width: u16, name: &str) {
+pub(crate) fn strip(p: &mut Painter, view: &View, area: Rect, x0: u16, width: u16, name: &str) {
     let y = area.y + 1;
     p.fill(Rect::new(area.x, y, area.width, 1), S::Hd);
     let (v, i, w) = match view.measured {

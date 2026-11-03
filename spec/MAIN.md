@@ -125,4 +125,7 @@ Baseline 2026-10-30. Earlier entries (including superseded and withdrawn ones) a
 | 2026-11-03 | M6b: nothing is printed on quit when the output is already OFF; the "left ON" and "turned OFF" lines appear only when the output was ON | SAFETY.md §4.9 prints a line for the cases that leave or change a live output; an OFF output needs no report |
 | 2026-11-03 | M6b: the close frame is sent on every normal quit, also when the OFF could not be confirmed, and the exit status is then 1 | Closing releases the front-panel lock, so the panel button can switch the output off by hand |
 | 2026-11-03 | M6b: `SIGINT` is handled like `SIGTERM` and `SIGHUP`, and a second `Ctrl-C` during the quit sequence stops the wait | A terminal in raw mode delivers `Ctrl-C` as a key, but `kill -INT` must not skip the close; the second press is the user insisting |
+| 2026-11-03 | M7 is built in two parts, M7a (help overlay) and M7b (Settings) | Same reason as M5 and M6; the help text needed the user's agreement first (DESIGN.md §11.7) |
+| 2026-11-03 | Under the help overlay `Space` only switches the output OFF, never ON | The ON question would be drawn under the overlay and could not be answered knowingly; the same rule as the too-small screen (SAF-10) |
+| 2026-11-03 | The Compact overlay pages are counted by the model from fixed row counts, not by the renderer | `↑` must always move one page; a renderer-side clamp made `↑` seem dead after extra `↓` presses |
 

@@ -977,3 +977,202 @@ fn saf_11_the_quit_prompt_replaces_the_key_bar_on_a_secondary_screen_too() {
             .any(|l| l.contains("Quit with output ON"))
     );
 }
+
+// ---- the help overlay (DESIGN.md §5.13) --------------------------------------------------
+
+fn with_help(mut model: Model) -> Model {
+    model.on_key(Key::Char('?'));
+    model
+}
+
+#[test]
+fn ui_02_help_main_standard() {
+    check(
+        "help-main-standard",
+        &with_help(model_with(example_dump(), PORT)),
+        80,
+        24,
+    );
+}
+
+fn help_on(keys: &[Key]) -> Model {
+    let mut model = named(model_with(example_dump(), PORT));
+    for key in keys {
+        model.on_key(*key);
+    }
+    model.on_key(Key::Char('?'));
+    model
+}
+
+#[test]
+fn ui_08_the_overlay_names_its_screen_and_shows_only_close_in_the_key_bar() {
+    for (keys, title) in [
+        (vec![], "Help · main panel"),
+        (vec![Key::Char('p')], "Help · presets"),
+        (vec![Key::Char('o')], "Help · protection"),
+    ] {
+        let model = help_on(&keys);
+        let lines = draw(&model, 80, 24);
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains(title) && l.contains("? or Esc closes")),
+            "{title}"
+        );
+        assert!(lines[23].trim() == "Esc  close", "{title}: `{}`", lines[23]);
+        assert!(lines[0].contains("FNIRSI"), "the header stays");
+        let strip = lines[1].contains("PRESETS") || lines[1].contains("PROTECTION");
+        assert_eq!(
+            strip,
+            !keys.is_empty(),
+            "{title}: the strip only on secondary screens"
+        );
+    }
+}
+
+#[test]
+fn ui_08_the_presets_overlay_carries_the_approved_text() {
+    let lines = draw(&help_on(&[Key::Char('p')]), 80, 24);
+    for text in [
+        "⏎        recall: writes V and I",
+        "e        edit the slot's V and I",
+        "n        rename (9 characters)",
+        "s        save the setpoints here",
+        "x        clear the slot",
+        "Recall writes V and I and never changes the output.",
+        "A slot above the live maximum is blocked, never clamped.",
+        "q   back (quits from the main panel)",
+    ] {
+        assert!(lines.iter().any(|l| l.contains(text)), "missing {text:?}");
+    }
+}
+
+#[test]
+fn ui_08_the_large_band_uses_the_standard_overlay_layout() {
+    let lines = draw(&help_on(&[]), 100, 21);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("Help · main panel") && l.contains("? or Esc closes"))
+    );
+    let row = lines
+        .iter()
+        .find(|l| l.contains("←→       move the digit cursor"))
+        .unwrap();
+    assert!(row.contains("p   Presets       ,  Settings"));
+    assert_eq!(lines[1].chars().count(), 100, "the box fills the width");
+}
+
+#[test]
+fn ui_08_the_compact_overlay_is_one_column_in_pages_shown_in_the_title() {
+    let mut model = help_on(&[]);
+    let first = draw(&model, 44, 16);
+    assert!(
+        first.iter().any(|l| l.contains("Help · main panel 1/2")),
+        "{first:#?}"
+    );
+    assert!(
+        first
+            .iter()
+            .any(|l| l.contains("←→ digit   ↑↓ value   Tab V/I"))
+    );
+    assert!(
+        first
+            .iter()
+            .any(|l| l.contains("p o ,   Presets Protection Settings"))
+    );
+    assert!(
+        !first.iter().any(|l| l.contains("Glossary")),
+        "that is on page 2"
+    );
+    assert!(
+        first[13].trim() == "Esc  close",
+        "key bar on row 13: `{}`",
+        first[13]
+    );
+    model.on_key(Key::Down);
+    let second = draw(&model, 44, 16);
+    assert!(second.iter().any(|l| l.contains("Help · main panel 2/2")));
+    assert!(second.iter().any(|l| l.contains("Glossary")));
+    assert!(second.iter().any(|l| l.contains("CV constant voltage")));
+    // Further presses stop at the last page; Up goes back.
+    for _ in 0..5 {
+        model.on_key(Key::Down);
+    }
+    assert!(draw(&model, 44, 16).iter().any(|l| l.contains("2/2")));
+    model.on_key(Key::Up);
+    model.on_key(Key::Up);
+    model.on_key(Key::Up);
+    assert!(draw(&model, 44, 16).iter().any(|l| l.contains("1/2")));
+}
+
+#[test]
+fn ui_08_the_compact_presets_overlay_matches_the_approved_page() {
+    let lines = draw(&help_on(&[Key::Char('p')]), 44, 16);
+    assert!(lines[1].contains("PRESETS"), "strip stays");
+    for text in [
+        "Help · presets 1/2",
+        "↑↓ select   ⏎ recall   e edit",
+        "n rename    s save     x clear",
+        "Esc back",
+        "p o ,   Presets Protection Settings",
+        "m 1-6   recall   q   quit/back",
+        "Space   output on / off",
+        "Ctrl-X  output OFF, always",
+    ] {
+        assert!(
+            lines.iter().any(|l| l.contains(text)),
+            "missing {text:?}\n{lines:#?}"
+        );
+    }
+    assert!(lines[15].trim() == "Esc  close", "`{}`", lines[15]);
+}
+
+#[test]
+fn ui_16_the_overlay_renders_at_every_size_with_its_box_intact() {
+    let screens: [Vec<Key>; 3] = [vec![], vec![Key::Char('p')], vec![Key::Char('o')]];
+    let cols: Vec<u16> = (44..=250).filter(|c| *c < 110 || c % 11 == 0).collect();
+    let row_list: Vec<u16> = (16..=80).filter(|r| *r < 34 || r % 7 == 0).collect();
+    for keys in &screens {
+        let model = help_on(keys);
+        for &cols_ in &cols {
+            for &rows_ in &row_list {
+                let lines = draw(&model, cols_, rows_);
+                let at = format!("{keys:?} {cols_}x{rows_}");
+                assert!(lines[0].contains("FNIRSI"), "{at}");
+                assert!(lines.iter().any(|l| l.contains("Esc  close")), "{at}");
+                let top = lines
+                    .iter()
+                    .position(|l| l.contains("Help ·"))
+                    .expect("a box");
+                if cols_ >= 80 && rows_ >= 21 {
+                    // The box fills the body and every inner row is closed.
+                    let bottom = lines.iter().rposition(|l| l.starts_with('╰')).unwrap();
+                    assert_eq!(bottom, usize::from(rows_) - 2, "{at}: down to the key bar");
+                    for line in &lines[top + 1..bottom] {
+                        assert!(line.ends_with('│'), "{at}: row not closed: `{line}`");
+                    }
+                    assert!(lines.iter().any(|l| l.contains("Glossary")), "{at}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn ui_05_the_overlay_is_readable_with_colour_off() {
+    let model = help_on(&[Key::Char('o')]);
+    let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
+    render(&model, &mut buf, Theme::new(Depth::None));
+    let lines = rows(&buf);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("r        load the device default"))
+    );
+    assert!(
+        buf.content()
+            .iter()
+            .all(|c| c.fg == ratatui::style::Color::Reset)
+    );
+}

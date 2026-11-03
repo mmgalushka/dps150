@@ -132,9 +132,12 @@ Built in two parts, like M5.
 - **Status:** built 2026-11-03 on branch `m6b/quit-and-close`: `q` with its two prompts, On exit, the 500 ms read-back, the close frame after the last write and one `SET_GAP`, the exit line printed last, status 1, `SIGTERM`/`SIGHUP`/`SIGINT`. 55 level 2 tests. **Open: the stage 3 gate** (on the unit, with the 10 Ω load) is a manual step for the user.
 
 ### M7. Completion (stage 4)
-- Settings and Help screens, config writing, colour modes, secondary-screen stretching, the remaining goldens, the size sweep.
-- Requirements: UI-02, UI-04, UI-05, UI-08, UI-09, UI-16.
-- Before starting: agree the Compact and secondary-screen help text (DESIGN.md §11.7).
+Built in two parts.
+
+**M7a. Help overlay.** `?` on every screen: the Standard and Large two-column overlay, the Compact one-column paged overlay, the text per screen (agreed 2026-11-03, DESIGN.md §11.7), its keys. Requirement: UI-08 (the key bar of the overlay), UI-16. Goldens: `help-main-standard`. *Status:* built 2026-11-03 on branch `m7/settings-help`.
+
+**M7b. Settings.** The Settings screen (`,`), config writing, the device brightness and volume writes, colour modes applied at run time. Requirements: UI-02, UI-04, UI-05, UI-09. Goldens: `settings-compact`, `settings-standard`, `settings-120x40`.
+
 - *Exit:* every golden passes; the sweep 44×16 … 250×80 is clean.
 
 ### M8. Release (stage 4)

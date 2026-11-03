@@ -6,6 +6,7 @@
 mod cli;
 mod config;
 pub mod constants;
+mod help;
 pub mod limits;
 mod model;
 mod names;
@@ -17,6 +18,7 @@ mod shutdown;
 
 pub use cli::{Cli, parse_args};
 pub use config::{ColorSetting, Config, Loaded, OnExit, OutputOn, config_path, load_config};
+pub use help::{COMPACT_ROWS_MAIN, COMPACT_ROWS_SECONDARY, Help, compact_pages, help_for};
 pub use model::{Effect, Entry, Focus, Key, Line, LinkStatus, Model, Tone};
 pub use names::{LoadedNames, MAX_NAME, Names, load_names, names_path, save_names};
 pub use output::Safety;

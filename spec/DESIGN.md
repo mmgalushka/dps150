@@ -719,7 +719,7 @@ The implementation agent must not invent these silently; ask or stub with a plai
 4. *(Not used; secondary-screen stretching is §8.5.)*
 5. *(Not used; the Fluid main panel and the fonts F5 and F7 are in §2.2 and §4.2. Fonts larger than F7 are not planned.)*
 6. **Measured-voltage decimals** (3 vs 2) once the device resolution is verified (§4.3).
-7. **Help overlay text for Compact** beyond the scrolling rule in §5.13, and for screens other than the main panel (their content is derived from the key tables, only `help-main-standard` is a golden rendering).
+7. *(Resolved 2026-11-03.)* **Help overlay text** for Compact and for the Presets, Protection and Settings screens. The user approved the proposal: the same two sections as `help-main-standard`, the keys taken from each screen's key table and only the glossary lines that apply; Compact is one column in pages of 10 (main panel) or 11 (secondary screens) rows, turned with `↑` `↓`, the page shown in the title as `1/2`. The text is in `crates/app/src/help.rs`. `Space` and `Ctrl-X` still work under the overlay, but `Space` only switches the output OFF there: the ON question could not be seen. The proposal text is [P] except Presets, which the user approved.
 8. Anything marked [U]: output-enable write, protection state mapping and clearing, CV/CC value mapping, brightness and volume ranges, persistence across power cycles, what the output does when the USB cable is pulled, and whether the device trips when the setpoint equals the limit (SAFETY.md §1).
 
 ## 12. Acceptance checklist
