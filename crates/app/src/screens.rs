@@ -82,6 +82,32 @@ pub enum Prompt {
     Clear {
         slot: usize,
     },
+    /// `Turn output ON at …?` (SAF-03).
+    OutputOn {
+        voltage: u32,
+        current: u32,
+    },
+    /// `Clear OTP and turn output ON at …?` (SAF-13).
+    ClearTrip {
+        trip: String,
+        voltage: u32,
+        current: u32,
+        cause: Option<String>,
+    },
+    /// A setpoint change beyond the threshold with the output ON (SAF-06).
+    Jump {
+        voltage: u32,
+        current: u32,
+        dv: Option<i64>,
+        di: Option<i64>,
+        writes: Vec<Write>,
+    },
+    /// A recall with the output ON (SAF-08).
+    Recall {
+        slot: usize,
+        voltage: u32,
+        current: u32,
+    },
 }
 
 impl Default for PresetsState {
@@ -280,6 +306,9 @@ impl Model {
     /// The question waiting for an answer, in both forms (§10).
     pub fn prompt_text(&self, compact: bool) -> Option<String> {
         let slot_text = |slot: usize| format!("M{}", slot + 1);
+        if let Some(text) = self.output_prompt_text(self.prompt.as_ref()?, compact) {
+            return Some(text);
+        }
         Some(match self.prompt.as_ref()? {
             Prompt::Overwrite {
                 slot,
@@ -319,6 +348,8 @@ impl Model {
                     )
                 }
             }
+            // The output prompts were answered above.
+            _ => return None,
         })
     }
 
@@ -360,6 +391,8 @@ impl Model {
         self.chord = false;
         match key {
             Key::Char(c @ '1'..='6') => self.recall(usize::from(c as u8 - b'1')),
+            // Space and Ctrl-X cancel the chord and turn the output OFF.
+            Key::Char(' ') | Key::CtrlX => self.off_only(),
             _ => Effect::None,
         }
     }
@@ -388,7 +421,7 @@ impl Model {
             return Effect::None;
         }
         if self.output_is_on() {
-            self.block_while_on();
+            self.recall_while_on(slot, voltage, current);
             return Effect::None;
         }
         let writes = vec![
@@ -617,11 +650,18 @@ impl Model {
                         self.names_changed();
                         self.write_slot(slot, CLEARED.0, CLEARED.1)
                     }
+                    other => self.confirm_output_prompt(&other).unwrap_or(Effect::None),
                 }
             }
-            Key::Char('n') | Key::Char('N') | Key::Esc | Key::Char(' ') | Key::CtrlX => {
+            Key::Char('n') | Key::Char('N') | Key::Esc => {
                 self.prompt = None;
                 Effect::None
+            }
+            // Space and Ctrl-X cancel the question and turn the output OFF if
+            // it is ON; they never turn it ON (SAF-05).
+            Key::Char(' ') | Key::CtrlX => {
+                self.prompt = None;
+                self.off_only()
             }
             Key::CtrlC => Effect::Quit,
             _ => Effect::None,
@@ -700,6 +740,10 @@ impl Model {
                 Key::Esc => {
                     self.protection.mode = ProtectionMode::Selecting;
                     return Effect::None;
+                }
+                Key::Char(' ') | Key::CtrlX => {
+                    self.protection.mode = ProtectionMode::Selecting;
+                    return self.off_only();
                 }
                 Key::CtrlC => return Effect::Quit,
                 Key::Char(c) if c.is_ascii_digit() => {

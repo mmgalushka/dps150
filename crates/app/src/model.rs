@@ -14,6 +14,7 @@ use protocol::value::{Milliamps, Millivolts};
 use crate::constants::{ENTRY_MAX_CHARS, NOTICE_DURATION};
 use crate::limits::{self, Bounds, Parsed, Quantity, Text};
 use crate::names::Names;
+use crate::output::Safety;
 use crate::screens::{PresetsState, Prompt, ProtectionState, Screen};
 
 /// Which readout has the focus (EDT-01).
@@ -112,7 +113,7 @@ pub struct Model {
     pub focus: Focus,
     voltage_cursor: usize,
     current_cursor: usize,
-    entry: Option<Entry>,
+    pub(crate) entry: Option<Entry>,
     pub(crate) notice: Option<Notice>,
     /// Values chosen by the user and not yet read back.
     pub(crate) pending: Vec<Write>,
@@ -126,6 +127,15 @@ pub struct Model {
     pub(crate) names_dirty: bool,
     pub(crate) prompt: Option<Prompt>,
     pub(crate) chord: bool,
+    pub(crate) safety: Safety,
+    /// The setpoint at the last output ON or confirmed prompt, which the
+    /// jump guard measures from (SAFETY.md §2).
+    pub(crate) reference: Option<(u32, u32)>,
+    /// An OFF waits for the link to come back (LNK-04).
+    pub(crate) off_queued: bool,
+    pub(crate) too_small: bool,
+    /// Writes no key caused (the queued OFF after a reconnect).
+    pub(crate) outgoing: Vec<Write>,
 }
 
 impl Model {
@@ -152,6 +162,11 @@ impl Model {
             names_dirty: false,
             prompt: None,
             chord: false,
+            safety: Safety::default(),
+            reference: None,
+            off_queued: false,
+            too_small: false,
+            outgoing: Vec::new(),
         }
     }
 
@@ -216,8 +231,16 @@ impl Model {
 
     pub fn apply(&mut self, message: Message) {
         match message {
-            Message::Model(snapshot) => self.snapshot = Some(*snapshot),
-            Message::Event(Event::Online { .. }) => self.link = LinkStatus::Online,
+            Message::Model(snapshot) => {
+                self.snapshot = Some(*snapshot);
+                self.follow_reference();
+            }
+            Message::Event(Event::Online { restored }) => {
+                self.link = LinkStatus::Online;
+                if restored {
+                    self.link_restored();
+                }
+            }
             Message::Event(Event::Lost(_) | Event::Failed(_)) => {
                 self.link = LinkStatus::Lost {
                     auto_reconnect: self.reconnect,
@@ -227,6 +250,7 @@ impl Model {
                 self.entry = None;
                 self.pending.clear();
                 self.notice = None;
+                self.reference = None;
                 self.prompt = None;
                 self.chord = false;
                 if matches!(self.presets.mode, crate::screens::PresetMode::Edit(_)) {
@@ -239,6 +263,11 @@ impl Model {
                 self.pending.clear();
                 match why {
                     Refusal::NotOnline => self.link_down_notice(),
+                    Refusal::OffPending => self.same_notice(
+                        "Output OFF is still pending",
+                        Tone::Warn,
+                        Some(self.now + NOTICE_DURATION),
+                    ),
                     Refusal::OutOfRange => self.same_notice(
                         "Write refused: outside the device range",
                         Tone::Error,
@@ -255,7 +284,17 @@ impl Model {
             !(pending.register() == written.register()
                 && pending.thousandths() == written.thousandths())
         });
-        if written.differs_from(device) {
+        if written == Write::Output(false) && device == Write::Output(true) {
+            // The one read-back that must never pass quietly.
+            self.set_notice(
+                Text {
+                    standard: "Output did not turn OFF. Use the front-panel button".into(),
+                    compact: "OFF failed: use the panel button".into(),
+                },
+                Tone::Error,
+                None,
+            );
+        } else if written.differs_from(device) {
             let text = format!("Device kept {}", describe(device));
             self.same_notice(&text, Tone::Warn, Some(self.now + NOTICE_DURATION));
         }
@@ -418,6 +457,25 @@ impl Model {
     pub fn on_key(&mut self, key: Key) -> Effect {
         // Any key clears a notice or a rejection (§5.12).
         self.notice = None;
+        if self.too_small {
+            // Only OFF and Ctrl-C work; `q` is ignored (SAF-10).
+            return match key {
+                Key::CtrlC => Effect::Quit,
+                Key::Char(' ') | Key::CtrlX => self.off_only(),
+                _ => Effect::None,
+            };
+        }
+        // `Space` and `Ctrl-X` outside the contexts that only cancel (typed
+        // entry, prompts, the chord): `Ctrl-X` is OFF in every mode, `Space`
+        // the toggle (SAF-01, SAF-02). In the rename field `Space` is a
+        // character.
+        let cancels =
+            self.prompt.is_some() || self.chord || self.entry.is_some() || self.protection_typing();
+        match key {
+            Key::CtrlX if !cancels => return self.off_only(),
+            Key::Char(' ') if !cancels && !self.renaming() => return self.toggle_output(),
+            _ => {}
+        }
         if self.screen != Screen::Main || self.prompt.is_some() || self.chord {
             return self.secondary_key(key);
         }
@@ -509,14 +567,6 @@ impl Model {
         self.snapshot.as_ref().is_some_and(|s| s.dump.output_on)
     }
 
-    pub(crate) fn block_while_on(&mut self) {
-        self.same_notice(
-            "Output is ON: changes are not sent yet",
-            Tone::Warn,
-            Some(self.now + NOTICE_DURATION),
-        );
-    }
-
     fn bounds(&self) -> Option<Bounds> {
         let dump = &self.snapshot.as_ref()?.dump;
         Some(Bounds::new(
@@ -541,10 +591,6 @@ impl Model {
         if !self.editable() {
             return Effect::None;
         }
-        if self.output_is_on() {
-            self.block_while_on();
-            return Effect::None;
-        }
         let Some(bounds) = self.bounds() else {
             return Effect::None;
         };
@@ -562,16 +608,24 @@ impl Model {
         if step.value == current {
             return Effect::None;
         }
-        self.stage(quantity, step.value)
+        self.change(quantity, step.value, &bounds)
     }
 
-    fn stage(&mut self, quantity: Quantity, value: u32) -> Effect {
-        let write = match quantity {
-            Quantity::Voltage => Write::SetVoltage(Millivolts::new(value)),
-            Quantity::Current => Write::SetCurrent(Milliamps::new(value)),
+    /// A setpoint change of one quantity, through the jump guard (SAF-06).
+    fn change(&mut self, quantity: Quantity, value: u32, bounds: &Bounds) -> Effect {
+        let (write, voltage, current) = match quantity {
+            Quantity::Voltage => (
+                Write::SetVoltage(Millivolts::new(value)),
+                value,
+                bounds.set_i,
+            ),
+            Quantity::Current => (
+                Write::SetCurrent(Milliamps::new(value)),
+                bounds.set_v,
+                value,
+            ),
         };
-        self.stage_write(write);
-        Effect::Write(write)
+        self.guarded(vec![write], voltage, current)
     }
 
     /// Shows `write` at once, until the read-back replaces it (EDT-04).
@@ -601,7 +655,11 @@ impl Model {
             Key::Backspace => {
                 entry.text.pop();
             }
-            Key::Esc | Key::Char(' ') | Key::CtrlX => self.entry = None,
+            Key::Esc => self.entry = None,
+            Key::Char(' ') | Key::CtrlX => {
+                self.entry = None;
+                return self.off_only();
+            }
             Key::Enter => return self.apply_entry(),
             // Everything else is ignored, including `v` and `i`.
             _ => {}
@@ -640,10 +698,6 @@ impl Model {
             return Effect::None;
         }
         self.entry = None;
-        if self.output_is_on() {
-            self.block_while_on();
-            return Effect::None;
-        }
         let current = match quantity {
             Quantity::Voltage => bounds.set_v,
             Quantity::Current => bounds.set_i,
@@ -651,7 +705,7 @@ impl Model {
         if value == current {
             return Effect::None;
         }
-        self.stage(quantity, value)
+        self.change(quantity, value, &bounds)
     }
 
     /// The entry stays open, its text turns `er`, and the reason stays until
@@ -661,6 +715,56 @@ impl Model {
             entry.rejected = true;
         }
         self.set_notice(text, Tone::Error, None);
+    }
+}
+
+impl Model {
+    fn renaming(&self) -> bool {
+        self.screen == Screen::Presets
+            && matches!(self.presets.mode, crate::screens::PresetMode::Rename(_))
+    }
+
+    fn protection_typing(&self) -> bool {
+        self.screen == Screen::Protection
+            && matches!(
+                &self.protection.mode,
+                crate::screens::ProtectionMode::Editing(edit) if edit.typed.is_some()
+            )
+    }
+
+    /// The link is back with the device's own values on screen. A queued OFF
+    /// is the first write (LNK-04, LNK-07).
+    fn link_restored(&mut self) {
+        let Some(dump) = self.snapshot.as_ref().map(|s| s.dump.clone()) else {
+            return;
+        };
+        let (v, i) = (
+            limits::two_decimals(dump.set_voltage.get()),
+            format!(
+                "{}.{:03}",
+                dump.set_current.get() / 1000,
+                dump.set_current.get() % 1000
+            ),
+        );
+        let text = if self.off_queued {
+            self.off_queued = false;
+            self.outgoing.push(Write::Output(false));
+            Text {
+                standard: "Link restored · queued OFF sent, output OFF".into(),
+                compact: "Restored · OFF sent".into(),
+            }
+        } else if dump.output_on {
+            Text {
+                standard: format!("Link restored · output ON at {v} V / {i} A"),
+                compact: format!("Restored · ON {v} V / {i} A"),
+            }
+        } else {
+            Text {
+                standard: "Link restored · output OFF".into(),
+                compact: "Restored · output OFF".into(),
+            }
+        };
+        self.set_notice(text, Tone::Warn, Some(self.now + NOTICE_DURATION));
     }
 }
 
@@ -676,6 +780,7 @@ fn describe(write: Write) -> String {
         }
         Write::Opp(_) => format!("{} W", limits::one_decimal(milli)),
         Write::Otp(_) => format!("{} °C", limits::one_decimal(milli)),
+        Write::Output(on) => format!("output {}", if on { "ON" } else { "OFF" }),
     }
 }
 
@@ -1072,38 +1177,6 @@ mod tests {
             Some(Millivolts::new(5000)),
             "the device value again"
         );
-    }
-
-    #[test]
-    fn saf_03_while_the_output_is_on_a_change_is_not_sent_in_this_build() {
-        let mut d = dump();
-        d.output_on = true;
-        let mut model = Model::new("/dev/x", true);
-        model.apply(snapshot(d));
-        assert_eq!(model.on_key(Key::Up), Effect::None);
-        assert_eq!(
-            model.message(false).unwrap().text,
-            "Output is ON: changes are not sent yet"
-        );
-        // Typing and range checks still work; applying is what is held back.
-        type_text(&mut model, "35");
-        model.on_key(Key::Enter);
-        assert!(
-            model
-                .message(false)
-                .unwrap()
-                .text
-                .starts_with("35 V is above")
-        );
-        model.on_key(Key::Backspace);
-        model.on_key(Key::Backspace);
-        type_text(&mut model, "6");
-        assert_eq!(model.on_key(Key::Enter), Effect::None);
-        assert_eq!(
-            model.message(false).unwrap().text,
-            "Output is ON: changes are not sent yet"
-        );
-        assert_eq!(model.set_voltage(), Some(Millivolts::new(5000)));
     }
 
     // ---- read-back -----------------------------------------------------------------

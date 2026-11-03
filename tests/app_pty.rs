@@ -621,22 +621,6 @@ fn lnk_03_with_the_link_down_edits_are_refused_and_nothing_goes_out_on_reconnect
     assert_eq!(tui.wait_exit(), 0);
 }
 
-#[test]
-fn saf_03_while_the_output_is_on_a_change_is_held_back() {
-    // The output is switched on from the simulator side (as the panel could);
-    // this build has no way to confirm a live change.
-    let mut sim = Sim::start();
-    let mut tui = Tui::start(&sim, &[]);
-    tui.wait_for("connected");
-    sim.command("panel on");
-    tui.wait_for("OUTPUT  ON");
-    tui.send(UP);
-    tui.wait_for("Output is ON: changes are not sent yet");
-    assert_eq!(sim.state()["vset"], "3.3");
-    tui.send(b"q");
-    assert_eq!(tui.wait_exit(), 0);
-}
-
 // ---- Presets and Protection ----------------------------------------------------------
 
 const ENTER: &[u8] = b"\r";
@@ -884,6 +868,297 @@ fn lnk_03_with_the_link_down_the_secondary_screens_still_show_and_refuse_edits()
     tui.wait_for("connected");
     thread::sleep(Duration::from_millis(500));
     assert_eq!(sim.state()["m1"], "5/1");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+// ---- output control ----------------------------------------------------------------------
+
+#[test]
+fn saf_03_space_asks_then_y_turns_the_output_on_and_space_turns_it_off_without_asking() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b" ");
+    tui.wait_for("Turn output ON at 3.30 V / 2.000 A?");
+    tui.wait_for("y  yes");
+    assert_eq!(
+        sim.state()["output"],
+        "off",
+        "nothing is sent while it asks"
+    );
+    // Enter does not answer it.
+    tui.send(ENTER);
+    thread::sleep(Duration::from_millis(300));
+    assert_eq!(sim.state()["output"], "off");
+    tui.send(b"y");
+    sim.wait_state("output", "on");
+    tui.wait_for("OUTPUT  ON");
+    tui.send(b" ");
+    sim.wait_state("output", "off");
+    tui.wait_for("OUTPUT  OFF");
+    assert_eq!(sim.state()["dropped"], "0");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_05_n_declines_and_the_output_stays_off() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b" ");
+    tui.wait_for("Turn output ON");
+    tui.send(b"n");
+    tui.gone("Turn output ON");
+    thread::sleep(Duration::from_millis(300));
+    assert_eq!(sim.state()["output"], "off");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_03_with_output_on_immediately_space_turns_it_on_at_once() {
+    let dir = config_dir(
+        "immediate",
+        &[("config.toml", "output_on = \"immediate\"\n")],
+    );
+    let xdg = dir.to_str().unwrap().to_string();
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[("XDG_CONFIG_HOME", &xdg)]);
+    tui.wait_for("connected");
+    tui.send(b" ");
+    sim.wait_state("output", "on");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn saf_02_ctrl_x_turns_an_output_that_is_on_off_even_in_typed_entry() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    tui.send(b"v");
+    tui.wait_for("Typing a voltage");
+    tui.send(&[0x18]); // Ctrl-X
+    sim.wait_state("output", "off");
+    tui.gone("Typing a voltage");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_06_a_big_jump_with_the_output_on_asks_and_only_a_yes_sends_it() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    tui.send(b"15\r");
+    tui.wait_for("Set 15.00 V / 2.000 A (+11.70 V), output ON?");
+    thread::sleep(Duration::from_millis(300));
+    assert_eq!(sim.state()["vset"], "3.3", "held, nothing sent");
+    // A second Enter, as after a double press, changes nothing.
+    tui.send(ENTER);
+    thread::sleep(Duration::from_millis(300));
+    assert_eq!(sim.state()["vset"], "3.3");
+    tui.send(b"y");
+    sim.wait_state("vset", "15");
+    tui.gone("output ON?");
+    assert_eq!(sim.state()["dropped"], "0");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_06_a_declined_jump_leaves_the_setpoint_and_space_cancels_it_and_switches_off() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    tui.send(b"15\r");
+    tui.wait_for("output ON?");
+    tui.send(b"n");
+    tui.gone("output ON?");
+    assert_eq!(sim.state()["vset"], "3.3");
+    tui.send(b"15\r");
+    tui.wait_for("output ON?");
+    tui.send(b" ");
+    sim.wait_state("output", "off");
+    assert_eq!(sim.state()["vset"], "3.3", "the jump was not applied");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_08_a_recall_with_the_output_on_asks_first() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    tui.send(b"m");
+    tui.wait_for("Recall which preset?");
+    tui.send(b"2");
+    tui.wait_for("Recall M2 5.00 V / 1.000 A, output ON?");
+    assert_eq!(sim.state()["vset"], "3.3");
+    tui.send(b"y");
+    sim.wait_state("vset", "5");
+    sim.wait_state("iset", "1");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn pro_01_a_trip_is_shown_and_space_offers_to_clear_it_by_turning_on() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    sim.command("trip otp");
+    for text in [
+        "PROTECTION TRIPPED",
+        "OTP tripped",
+        "output forced off",
+        "● OTP",
+    ] {
+        tui.wait_for(text);
+    }
+    assert_eq!(sim.state()["protection"], "otp");
+    tui.send(b" ");
+    tui.wait_for("Clear OTP and turn output ON at 3.30 V / 2.000 A?");
+    assert_eq!(sim.state()["protection"], "otp", "nothing sent yet");
+    tui.send(b"y");
+    sim.wait_state("output", "on");
+    sim.wait_state("protection", "none");
+    tui.gone("PROTECTION TRIPPED");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_13_a_clear_that_trips_again_shows_the_trip_says_why_and_is_not_retried() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    // The unit is hot: the trip is there, and so is its cause.
+    sim.command("temp 85");
+    tui.wait_for("OTP tripped");
+    tui.send(b" ");
+    tui.wait_for("Clear OTP (85.0 °C > 80.0 °C) and turn ON at 3.30 V / 2.000 A?");
+    tui.send(b"y");
+    // The clear turns the output on and it trips again at once.
+    sim.wait_state("protection", "otp");
+    sim.wait_state("output", "off");
+    tui.wait_for("OTP tripped");
+    thread::sleep(Duration::from_millis(700));
+    assert_eq!(sim.state()["output"], "off", "no automatic retry");
+    assert_eq!(sim.state()["dropped"], "0");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn lnk_04_an_off_queued_while_the_link_is_down_is_sent_first_after_the_reconnect() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    sim.command("unplug");
+    tui.wait_for("no link");
+    tui.send(b" ");
+    tui.wait_for("Off queued · use the front-panel button");
+    assert_eq!(
+        sim.state()["output"],
+        "on",
+        "the cable is out: nothing can be sent"
+    );
+    sim.command("plug");
+    tui.wait_for("Link restored · queued OFF sent, output OFF");
+    sim.wait_state("output", "off");
+    tui.wait_for("OUTPUT  OFF");
+    assert_eq!(sim.state()["dropped"], "0");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn lnk_04_a_second_space_while_down_clears_the_queue() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    sim.command("unplug");
+    tui.wait_for("no link");
+    tui.send(b" ");
+    tui.wait_for("Off queued");
+    tui.send(b" ");
+    tui.wait_for("Off queue cleared");
+    sim.command("plug");
+    tui.wait_for("Link restored · output ON at 3.30 V / 2.000 A");
+    thread::sleep(Duration::from_millis(500));
+    assert_eq!(sim.state()["output"], "on", "nothing was sent");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_10_on_the_too_small_screen_space_only_switches_off_q_is_ignored_and_ctrl_c_quits() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start_sized(&sim, &[], 15, 43);
+    tui.wait_for("Terminal too small");
+    tui.wait_for("output ON 3.30 V / 2.000 A");
+    tui.send(b"q");
+    thread::sleep(Duration::from_millis(300));
+    assert!(tui.child.try_wait().unwrap().is_none(), "q is ignored");
+    tui.send(b" ");
+    sim.wait_state("output", "off");
+    tui.wait_for("output OFF");
+    tui.send(b" ");
+    thread::sleep(Duration::from_millis(400));
+    assert_eq!(sim.state()["output"], "off", "Space never turns it on here");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_09_a_prompt_is_cancelled_when_the_terminal_becomes_too_small() {
+    let sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b" ");
+    tui.wait_for("Turn output ON");
+    let path = tui._slave.name().unwrap();
+    Command::new("stty")
+        .args(["-F", &path, "rows", "15", "cols", "43"])
+        .status()
+        .unwrap();
+    tui.screen
+        .lock()
+        .unwrap()
+        .screen_mut()
+        .set_size(nz(15), nz(43));
+    Command::new("kill")
+        .args(["-WINCH", &tui.child.id().to_string()])
+        .status()
+        .unwrap();
+    tui.wait_for("Terminal too small");
+    // Back to a usable size: the question did not come back.
+    Command::new("stty")
+        .args(["-F", &path, "rows", "24", "cols", "80"])
+        .status()
+        .unwrap();
+    tui.screen
+        .lock()
+        .unwrap()
+        .screen_mut()
+        .set_size(nz(24), nz(80));
+    Command::new("kill")
+        .args(["-WINCH", &tui.child.id().to_string()])
+        .status()
+        .unwrap();
+    tui.wait_for("MEASURED");
+    assert!(!tui.contents().contains("Turn output ON"));
     tui.send(&[0x03]);
     assert_eq!(tui.wait_exit(), 0);
 }

@@ -266,19 +266,6 @@ fn pre_02_a_slot_that_breaks_an_ordering_rule_is_blocked() {
 }
 
 #[test]
-fn saf_08_while_the_output_is_on_a_recall_is_held_back_in_this_build() {
-    let mut d = dump();
-    d.output_on = true;
-    let mut model = model_with(d);
-    model.on_key(Key::Char('m'));
-    assert_eq!(model.on_key(Key::Char('2')), Effect::None);
-    assert_eq!(
-        model.message(false).unwrap().text,
-        "Output is ON: changes are not sent yet"
-    );
-}
-
-#[test]
 fn lnk_03_with_the_link_down_nothing_can_be_recalled_saved_or_edited() {
     let mut model = model();
     model.on_key(Key::Char('p'));

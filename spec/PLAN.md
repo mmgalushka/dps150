@@ -117,8 +117,17 @@ Built in two parts, each its own branch and pull request, because together they 
 - **Status:** built 2026-11-03 on branch `m5b/presets-protection`: the secondary-screen frame and live strip, the Presets screen (list, edit, rename, save, clear, recall, the `m` chord), the Protection screen (select, edit, typed entry, defaults, validation, stored violations), `presets.toml`. Goldens `presets-{compact,standard,120x40}` and `protection-{compact,standard,120x40}` pass; 31 level 2 tests. **Open: the stage 2 gate itself** (dump comparison on the real unit) is a manual step. Like M5a, a recall while the output is ON is held back until M6.
 
 ### M6. Output control (stage 3)
-- Output ON and OFF, prompts, jump guard, recall prompt, too-small rules, OFF priority, tripped state, queued OFF and reconnect, quit, signals.
-- Requirements: SAF-01 to SAF-11, LNK-04, LNK-05, LNK-07, PRO-01, PRO-02, APP-09.
+Built in two parts, like M5.
+
+**M6a. Output control during a session.**
+- The output write (`Write::Output`) with OFF first in the queue, the ON confirmation, the jump guard with its reference point, the recall prompt, `Space` and `Ctrl-X` in every context, the too-small rules, the tripped state and clearing it, the queued OFF and the restore notice after a reconnect, ordering and live-maximum refusal of ON.
+- Requirements: SAF-01 to SAF-10, SAF-13, LNK-04, LNK-05, LNK-07, PRO-01, APP-09 (PRO-02 is withdrawn, superseded by SAF-13).
+- *Exit:* goldens `main-*-confirm-on`, `main-*-confirm-jump`, `main-*-trip` pass; level 2 tests drive the output switch, a prompt, a jump, a trip and its clear, the queued OFF and the too-small screen against the simulator.
+- **Status:** built 2026-11-03 on branch `m6/output-control`. The stopgap of M5 (a change while the output is ON is held back) is gone: the jump guard and the recall prompt replace it.
+
+**M6b. Quit, signals and session close.**
+- `q` and its prompt, Settings → On exit, the 500 ms read-back, the stdout line, exit status 1 when OFF cannot be confirmed, `SIGTERM` and `SIGHUP` following the setting, and the close frame `F1 C1 00 01 00 01` after the last write and one `SET_GAP`.
+- Requirements: SAF-11, SAF-14.
 - *Exit:* the stage 3 gate, with the user at the unit and the H1 load: confirm, jump guard, one real trip, a cable pull with queued OFF, each quit path.
 
 ### M7. Completion (stage 4)
@@ -148,14 +157,14 @@ Only H1 depends on the user being present, plus the stage gates and the M8 steps
 | PRT | 01, 06 M3 · 02 M1 · 03, 04 M5a · 05 M4 |
 | CLI | 01, 02 M4 |
 | LIM | 01–09 M5a (Protection-screen half of 05, and 06: M5b) |
-| SAF | 01–11 M6 · 12 M5b |
-| LNK | 01, 06 M3 · 02 M4 · 03 M5a · 04, 05, 07 M6 |
+| SAF | 01–10, 13 M6a · 11, 14 M6b · 12 M5b · 15 M3 |
+| LNK | 01, 06 M3 · 02 M4 · 03 M5a · 04, 05, 07 M6a |
 | EDT | 01–06 M5a · 07 M5b |
 | PRE | 01–04 M5b |
-| PRO | 01, 02 M6 |
+| PRO | 01 M6a · 02 withdrawn |
 | CFG | 01 M4 · 02 M5b |
 | UI | 01, 03, 06, 07, 10–15, 17 M4 · 02, 04, 05, 08, 09, 16 M7 |
-| APP | 01, 02, 08, 10, 11 M3 · 03, 04 M1 · 05, 06, 07 M4 · 09 M6 · 12 M5a |
+| APP | 01, 02, 08, 10, 11 M3 · 03, 04 M1 · 05, 06, 07 M4 · 09 M6a · 12 M5a |
 | SIM | 01–12 M2 |
 
 ## 6. Risks

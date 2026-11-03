@@ -681,6 +681,18 @@ Screen names (strip): `PRESETS`, `PROTECTION`, `SETTINGS`. Box titles: `VOLTAGE`
 | Protection tripped | `OTP tripped  output forced off ·` | `OTP tripped · output off ·` | `Space` clear | 47 / 41 |
 | Still tripped | `Still tripped. Check the cause, then try again.` | `Still tripped` |  | 47 / 13 |
 
+**Added in M6a [P]:**
+
+| Message | Standard / Compact |
+|---|---|
+| Queued OFF cleared by a second `Space` | `Off queue cleared` |
+| Link restored, output OFF | `Link restored · output OFF` / `Restored · output OFF` |
+| An OFF is still pending when an ON is asked | `Output OFF is still pending` |
+| The read-back shows the output still ON after an OFF (stays until a key) | `Output did not turn OFF. Use the front-panel button` / `OFF failed: use the panel button` |
+| Clear a trip whose cause is still visible (OTP, LVP) | `Clear OTP (85.0 °C > 80.0 °C) and turn ON at 5.00 V / 1.500 A?` |
+| Cannot turn ON, OPP | `Cannot turn ON: set power is not below OPP (o)` / `ON blocked: power not below OPP` |
+| Cannot turn ON, current | `Cannot turn ON: set current is above the live maximum` / `ON blocked: I above live max`, and `… not below OCP (o)` / `ON blocked: I not below OCP` |
+
 **Added in M5b [P]** (not in the table above; the implementation needed them, they follow its style):
 
 | Message | Standard / Compact |

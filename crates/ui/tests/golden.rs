@@ -192,6 +192,76 @@ fn protection_screen() -> Model {
     model
 }
 
+/// Output OFF, measured values zero, same setpoints (DESIGN.md §0.2).
+fn off_dump() -> Dump {
+    let mut dump = example_dump();
+    dump.output_on = false;
+    dump.output = OutputReading {
+        voltage: 0.0,
+        current: 0.0,
+        power: 0.0,
+    };
+    dump
+}
+
+/// The protection-trip renderings use an OTP trip (§0.2).
+fn trip_model() -> Model {
+    let mut dump = off_dump();
+    dump.protection = 4;
+    model_with(dump, PORT)
+}
+
+fn asked_to_turn_on() -> Model {
+    let mut model = model_with(off_dump(), PORT);
+    model.on_key(Key::Char(' '));
+    model
+}
+
+fn asked_about_a_jump() -> Model {
+    // Output ON at 5.00 V; typing 15 and applying it asks (+10.00 V).
+    typing(model_with(example_dump(), PORT), "15", true)
+}
+
+#[test]
+fn ui_02_main_standard_confirm_on() {
+    check("main-standard-confirm-on", &asked_to_turn_on(), 80, 24);
+}
+
+#[test]
+fn ui_02_main_compact_confirm_on() {
+    check("main-compact-confirm-on", &asked_to_turn_on(), 44, 16);
+}
+
+#[test]
+fn ui_02_main_standard_confirm_jump() {
+    check("main-standard-confirm-jump", &asked_about_a_jump(), 80, 24);
+}
+
+#[test]
+fn ui_02_main_compact_confirm_jump() {
+    check("main-compact-confirm-jump", &asked_about_a_jump(), 44, 16);
+}
+
+#[test]
+fn ui_02_main_standard_trip() {
+    check("main-standard-trip", &trip_model(), 80, 24);
+}
+
+#[test]
+fn ui_02_main_compact_trip() {
+    check("main-compact-trip", &trip_model(), 44, 16);
+}
+
+#[test]
+fn ui_02_main_large_trip() {
+    check("main-large-trip", &trip_model(), 100, 21);
+}
+
+#[test]
+fn ui_02_main_trip_120x40() {
+    check("main-trip-120x40", &trip_model(), 120, 40);
+}
+
 #[test]
 fn ui_02_presets_standard() {
     check("presets-standard", &presets_screen(), 80, 24);

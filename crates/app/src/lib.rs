@@ -9,6 +9,7 @@ pub mod constants;
 pub mod limits;
 mod model;
 mod names;
+mod output;
 mod port;
 pub mod protection;
 mod screens;
@@ -17,6 +18,7 @@ pub use cli::{Cli, parse_args};
 pub use config::{ColorSetting, Config, Loaded, OnExit, OutputOn, config_path, load_config};
 pub use model::{Effect, Entry, Focus, Key, Line, LinkStatus, Model, Tone};
 pub use names::{LoadedNames, MAX_NAME, Names, load_names, names_path, save_names};
+pub use output::Safety;
 pub use port::{PortInfo, ResolveError, USB_ID, resolve_port};
 pub use screens::{
     Blocked, CLEARED, PresetEdit, PresetMode, PresetsState, Prompt, ProtectionEdit, ProtectionMode,
