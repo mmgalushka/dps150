@@ -154,6 +154,74 @@ fn typing(mut model: Model, text: &str, apply: bool) -> Model {
     model
 }
 
+/// The example names of DESIGN.md §0.2.
+fn named(mut model: Model) -> Model {
+    let mut names: app::Names = Default::default();
+    for (slot, name) in [
+        "3V3 logic",
+        "USB 5V",
+        "9V pedal",
+        "12V fan",
+        "LED test",
+        "24V rail",
+    ]
+    .iter()
+    .enumerate()
+    {
+        names[slot] = (*name).into();
+    }
+    model.set_names(names, true);
+    model
+}
+
+fn presets_screen() -> Model {
+    let mut model = named(model_with(example_dump(), PORT));
+    // M3 is selected in every Presets reference.
+    for key in [Key::Char('p'), Key::Down, Key::Down] {
+        model.on_key(key);
+    }
+    model
+}
+
+fn protection_screen() -> Model {
+    let mut model = named(model_with(example_dump(), PORT));
+    // Editing OCP, cursor on the units digit.
+    for key in [Key::Char('o'), Key::Down, Key::Enter] {
+        model.on_key(key);
+    }
+    model
+}
+
+#[test]
+fn ui_02_presets_standard() {
+    check("presets-standard", &presets_screen(), 80, 24);
+}
+
+#[test]
+fn ui_02_presets_compact() {
+    check("presets-compact", &presets_screen(), 44, 16);
+}
+
+#[test]
+fn ui_02_presets_120x40() {
+    check("presets-120x40", &presets_screen(), 120, 40);
+}
+
+#[test]
+fn ui_02_protection_standard() {
+    check("protection-standard", &protection_screen(), 80, 24);
+}
+
+#[test]
+fn ui_02_protection_compact() {
+    check("protection-compact", &protection_screen(), 44, 16);
+}
+
+#[test]
+fn ui_02_protection_120x40() {
+    check("protection-120x40", &protection_screen(), 120, 40);
+}
+
 #[test]
 fn ui_02_main_standard_entry() {
     let model = typing(model_with(example_dump(), PORT), "12.5", false);
@@ -507,4 +575,271 @@ fn ui_05_focus_and_link_loss_are_visible_in_text_not_only_in_colour() {
             .iter()
             .any(|l| l.contains("Output state unknown, may still be ON"))
     );
+}
+
+// ---- secondary screens: invariants and states ------------------------------------
+
+fn bottom_line(lines: &[String], cols_: u16, rows_: u16) -> &str {
+    // Compact keeps its bar on row 16 of the block; Fluid uses the last row.
+    let row = if cols_ >= 80 && rows_ >= 21 {
+        usize::from(rows_) - 1
+    } else {
+        15
+    };
+    &lines[row]
+}
+
+#[test]
+fn ui_16_both_screens_render_at_every_size_with_their_frame_intact() {
+    let presets = presets_screen();
+    let protection = protection_screen();
+    let cols: Vec<u16> = (44..=250).filter(|c| *c < 110 || c % 9 == 0).collect();
+    let row_list: Vec<u16> = (16..=80).filter(|r| *r < 34 || r % 6 == 0).collect();
+    for (model, name) in [(&presets, "PRESETS"), (&protection, "PROTECTION")] {
+        for &cols_ in &cols {
+            for &rows_ in &row_list {
+                let lines = draw(model, cols_, rows_);
+                let at = format!("{name} {cols_}x{rows_}");
+                assert!(
+                    lines[0].contains("FNIRSI") && lines[0].contains("connected"),
+                    "{at}"
+                );
+                assert!(lines[1].contains(name), "{at}: screen name in the strip");
+                assert!(lines[1].contains("4.998 V"), "{at}: live strip");
+                let bar = bottom_line(&lines, cols_, rows_);
+                assert!(bar.contains("Esc"), "{at}: key bar `{bar}`");
+                if cols_ >= 80 && rows_ >= 21 {
+                    assert!(
+                        lines[2].starts_with('╭'),
+                        "{at}: body starts under the strip"
+                    );
+                    assert_eq!(
+                        lines[2].chars().count(),
+                        usize::from(cols_),
+                        "{at}: full width"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn ui_16_the_edit_box_uses_the_largest_font_that_fits() {
+    let height_of = |model: &Model, cols_, rows_, marker: &str| {
+        let lines = draw(model, cols_, rows_);
+        let first = lines.iter().position(|l| l.contains(marker)).unwrap();
+        let second = lines
+            .iter()
+            .position(|l| l.contains("CURRENT") && !l.contains("╭"))
+            .unwrap();
+        second - first - 2
+    };
+    let presets = presets_screen();
+    assert_eq!(height_of(&presets, 80, 24, "VOLTAGE"), 5, "F5 at 80x24");
+    assert_eq!(height_of(&presets, 120, 40, "VOLTAGE"), 7, "F7 at 120x40");
+    assert_eq!(
+        height_of(&presets, 80, 21, "VOLTAGE"),
+        3,
+        "F3 when F5 does not fit"
+    );
+}
+
+#[test]
+fn ui_05_a_prompt_replaces_the_key_bar_with_its_question_and_keys() {
+    let mut model = presets_screen();
+    model.on_key(Key::Char('s'));
+    let lines = draw(&model, 80, 24);
+    let bar = lines[23].clone();
+    assert!(
+        bar.contains("Overwrite M3?  9.00 V/2.000 A → 5.00 V/1.500 A"),
+        "{bar}"
+    );
+    assert!(bar.contains(" y  yes") && bar.contains(" Esc  no"), "{bar}");
+    let lines = draw(&model, 44, 16);
+    assert!(
+        lines[15].contains("Overwrite M3?") && !lines[15].contains("9.00"),
+        "{}",
+        lines[15]
+    );
+    // Answering puts the key bar back.
+    model.on_key(Key::Char('n'));
+    assert!(draw(&model, 80, 24)[23].contains("recall"));
+}
+
+#[test]
+fn ui_05_a_message_replaces_the_key_bar_and_the_next_key_restores_it() {
+    let mut dump = example_dump();
+    dump.output_on = false;
+    let mut model = named(model_with(dump, PORT));
+    for key in [Key::Char('p'), Key::Down, Key::Down, Key::Enter] {
+        model.on_key(key);
+    }
+    assert!(draw(&model, 80, 24)[23].contains("Recalled M3 · 9.00 V / 2.000 A"));
+    model.on_key(Key::Up);
+    assert!(draw(&model, 80, 24)[23].contains("recall"));
+}
+
+#[test]
+fn ui_05_the_chord_message_shows_on_the_main_panel() {
+    let mut dump = example_dump();
+    dump.output_on = false;
+    let mut model = model_with(dump, PORT);
+    model.on_key(Key::Char('m'));
+    assert!(
+        draw(&model, 80, 24)
+            .iter()
+            .any(|l| l.contains("Recall which preset? 1-6, Esc cancels"))
+    );
+    assert!(
+        draw(&model, 44, 16)
+            .iter()
+            .any(|l| l.contains("Recall which? 1-6, Esc"))
+    );
+}
+
+#[test]
+fn lnk_02_the_strip_shows_dashes_and_an_unknown_output_while_the_link_is_down() {
+    let down = lost(presets_screen());
+    let lines = draw(&down, 80, 24);
+    assert!(lines[0].contains("no link"));
+    assert!(
+        lines[1].contains("-.--- V") && lines[1].contains("-.--- A") && lines[1].contains("-.-- W")
+    );
+    assert!(lines[1].contains(" ?"), "{}", lines[1]);
+    assert!(!lines[1].contains("4.998"));
+    let lines = draw(&down, 44, 16);
+    assert!(lines[1].contains("-.--- V") && lines[1].contains(" ?"));
+}
+
+#[test]
+fn ui_16_the_strip_shows_off_and_the_mode_when_on() {
+    let mut dump = example_dump();
+    dump.output_on = false;
+    let off = draw(&named(model_with(dump, PORT)), 80, 24);
+    let mut model = named(model_with(example_dump(), PORT));
+    model.on_key(Key::Char('p'));
+    let on = draw(&model, 80, 24);
+    assert!(on[1].contains("CV · ON"));
+    let mut cc = named(model_with(cc_dump(), PORT));
+    cc.on_key(Key::Char('p'));
+    assert!(draw(&cc, 80, 24)[1].contains("CC · ON"));
+    assert!(draw(&cc, 44, 16)[1].contains(" ON"));
+    let mut dump = example_dump();
+    dump.output_on = false;
+    let mut model = named(model_with(dump, PORT));
+    model.on_key(Key::Char('p'));
+    assert!(draw(&model, 80, 24)[1].contains(" OFF"));
+    let _ = off;
+}
+
+#[test]
+fn lim_06_a_stored_violation_is_shown_on_the_protection_screen_and_not_hidden() {
+    let mut dump = example_dump();
+    dump.ovp = Millivolts::new(5000); // not above the 5.00 V setpoint
+    let mut model = named(model_with(dump, PORT));
+    model.on_key(Key::Char('o'));
+    let lines = draw(&model, 80, 24);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("✗ Set voltage 5.00 V is not below OVP 5.00 V"))
+    );
+    assert!(!lines.iter().any(|l| l.contains("no protection tripped")));
+    let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
+    render(&model, &mut buf, Theme::new(Depth::TrueColor));
+    let (x, y) = find(&buf, "5.00 V   0 – 30 V");
+    assert_eq!(
+        buf[(x, y)].fg,
+        rgb(0xff5c7a),
+        "the offending limit is drawn in er"
+    );
+}
+
+#[test]
+fn lim_08_a_tripped_protection_is_named_on_the_protection_screen() {
+    let mut dump = example_dump();
+    dump.protection = 4;
+    dump.output_on = false;
+    let mut model = named(model_with(dump, PORT));
+    model.on_key(Key::Char('o'));
+    let lines = draw(&model, 80, 24);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("● OTP tripped   last trip: OTP"))
+    );
+}
+
+#[test]
+fn ui_05_the_selected_row_is_highlighted_to_the_edge_of_the_box_interior() {
+    let model = presets_screen();
+    let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
+    render(&model, &mut buf, Theme::new(Depth::TrueColor));
+    let (x, y) = find(&buf, "▸ M3");
+    let sel = rgb(0x2d3b5e);
+    assert_eq!(buf[(x, y)].bg, sel);
+    // From the first inner column to the last, and not on the border.
+    assert_eq!(buf[(2, y)].bg, sel);
+    assert_eq!(buf[(45, y)].bg, sel);
+    assert_ne!(buf[(46, y)].bg, sel);
+    assert_ne!(buf[(0, y)].bg, sel);
+    // Another row is not highlighted.
+    assert_ne!(buf[(5, y - 1)].bg, sel);
+    // With colour off the selection is a reverse-video row.
+    let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
+    render(&model, &mut buf, Theme::new(Depth::None));
+    assert!(
+        buf[(x, y)]
+            .modifier
+            .contains(ratatui::style::Modifier::REVERSED)
+    );
+}
+
+#[test]
+fn pre_04_renaming_shows_the_field_in_the_box_title_and_a_matching_key_bar() {
+    let mut model = presets_screen();
+    model.on_key(Key::Char('n'));
+    let lines = draw(&model, 80, 24);
+    assert!(
+        lines.iter().any(|l| l.contains("M3 · 9V pedal")),
+        "title holds the field"
+    );
+    let bar = &lines[23];
+    assert!(
+        bar.contains("⏎  save") && bar.contains("Esc  cancel") && !bar.contains("help"),
+        "{bar}"
+    );
+}
+
+#[test]
+fn lim_05_the_protection_edit_box_flags_an_invalid_candidate_and_a_maximum_default() {
+    let mut model = named(model_with(example_dump(), PORT));
+    for key in [
+        Key::Char('o'),
+        Key::Down,
+        Key::Enter,
+        Key::Left,
+        Key::Down,
+        Key::Down,
+        Key::Down,
+        Key::Down,
+    ] {
+        model.on_key(key);
+    }
+    // OCP candidate is now 1.10 A, below the 1.500 A current limit.
+    let lines = draw(&model, 80, 24);
+    assert!(
+        lines.iter().any(|l| l.contains("✗ OCP not above it")),
+        "{lines:#?}"
+    );
+    // `r` loads the default, which equals the device maximum for OCP.
+    model.on_key(Key::Char('r'));
+    let lines = draw(&model, 80, 24);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("! default is the device maximum: no protection"))
+    );
+    assert!(lines.iter().any(|l| l.contains("✓ OCP stays above it")));
 }

@@ -9,6 +9,8 @@ use crate::theme::{S, Theme};
 pub(crate) struct Painter<'a> {
     pub buf: &'a mut Buffer,
     pub theme: Theme,
+    /// Draw on the `sel` background: a selected row (§5.7).
+    pub sel: bool,
 }
 
 impl Painter<'_> {
@@ -16,6 +18,11 @@ impl Painter<'_> {
     /// outside the buffer are skipped.
     pub fn text(&mut self, x: u16, y: u16, text: &str, s: S) -> u16 {
         let style = self.theme.style(s);
+        let style = if self.sel {
+            self.theme.on_sel(style)
+        } else {
+            style
+        };
         let area = self.buf.area;
         let mut column = x;
         for ch in text.chars() {
@@ -44,6 +51,11 @@ impl Painter<'_> {
     /// Fills `rect` with blanks in style `s`.
     pub fn fill(&mut self, rect: Rect, s: S) {
         let style = self.theme.style(s);
+        let style = if self.sel {
+            self.theme.on_sel(style)
+        } else {
+            style
+        };
         let rect = rect.intersection(self.buf.area);
         for y in rect.y..rect.y + rect.height {
             for x in rect.x..rect.x + rect.width {

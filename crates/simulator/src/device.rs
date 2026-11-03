@@ -408,6 +408,9 @@ impl SimDevice {
         line("lvp", self.lvp.to_string());
         line("brightness", self.brightness.to_string());
         line("volume", self.volume.to_string());
+        for (index, (v, i)) in self.presets.iter().enumerate() {
+            line(&format!("m{}", index + 1), format!("{v}/{i}"));
+        }
         line("dropped", self.dropped.to_string());
         text
     }

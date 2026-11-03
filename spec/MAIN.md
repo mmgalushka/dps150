@@ -115,4 +115,7 @@ Baseline 2026-10-30. Earlier entries (including superseded and withdrawn ones) a
 | 2026-11-03 | Until M6, a setpoint change while the output is ON is held back with `Output is ON: changes are not sent yet` | The jump guard (SAF-06) is an M6 rule; without it a held key could walk the voltage on a live load. Typing, range checks and rejections still work |
 | 2026-11-03 | The rejection for a value that breaks OPP has no row in DESIGN.md §10; one was added, marked [P] | LIM-04 requires the rule; the text follows the OVP and OCP rows and fits their cell limits |
 | 2026-11-03 | `Space` and `Ctrl-X` in typed entry cancel the entry; the "and turn the output OFF" half arrives with the output milestone | There is no output write yet (PLAN.md §1) |
+| 2026-11-03 | M5b: a recall while the output is ON is held back like any setpoint change, until M6 adds the recall prompt (SAF-08) | Same reason as M5a: the confirmations belong to the output milestone |
+| 2026-11-03 | M5b: OTP below the measured temperature is an invalid candidate on the Protection screen | The unit trips at once even with the output off, and the host cannot clear a trip without turning the output on (PROTOCOL.md §7.9) |
+| 2026-11-03 | M5b: the texts and labels that DESIGN.md left open for the Protection screen and the new notices were added to DESIGN.md §10, marked [P] | Raised, not invented silently (DESIGN.md §11) |
 

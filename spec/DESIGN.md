@@ -681,6 +681,20 @@ Screen names (strip): `PRESETS`, `PROTECTION`, `SETTINGS`. Box titles: `VOLTAGE`
 | Protection tripped | `OTP tripped  output forced off ·` | `OTP tripped · output off ·` | `Space` clear | 47 / 41 |
 | Still tripped | `Still tripped. Check the cause, then try again.` | `Still tripped` |  | 47 / 13 |
 
+**Added in M5b [P]** (not in the table above; the implementation needed them, they follow its style):
+
+| Message | Standard / Compact |
+|---|---|
+| Typed text is not a number | `{x} is not a number` |
+| Save into a slot that already holds the values | `M3 already holds these values` |
+| Clear a slot that is already clear | `M3 is already clear` |
+| Names could not be saved (invalid `presets.toml`) | `Names not saved: presets.toml is invalid` |
+| Names could not be written | `Could not save presets.toml: {reason}` |
+| Held back while the output is ON (until M6) | `Output is ON: changes are not sent yet` |
+| Device refused a write (defect, APP-12) | `Write refused: outside the device range` |
+
+**Protection screen texts added in M5b [P].** The reason after `✗` is short because the related value is on the same line: `OVP not above it`, `OCP not above it`, `OPP not above it`, `LVP not below it`, `OTP not above it`, `above device range`. Related-setpoint labels: `Voltage set`, `Current limit`, `Set power`, `Input now`, `Temp now`. The third info line is `Drawn now … margin …` for OVP, OCP and OPP and `Margin …` for LVP and OTP. A new rule: **OTP must be at least 0.1 °C above the temperature**, because the unit trips at once when the threshold is below it, even with the output off (PROTOCOL.md §7.9). Compact validation text: `above set 5.00 V`, `above limit 1.500 A`, `above power 7.5 W`, `below input 20.25 V`, `above temp 24.3 °C`, with `not ` in front when invalid.
+
 Placeholders: `{V}` `{I}` setpoint values, `{ΔV}` `{ΔI}` signed changes, `{x}` the typed text, `{max}` the limit named in the message.
 
 ## 11. Not yet designed

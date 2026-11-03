@@ -172,6 +172,20 @@ impl Theme {
         }
     }
 
+    /// A style drawn on a selected row: the same text on the `sel`
+    /// background, `S`+x of §3.2 (§5.7).
+    pub fn on_sel(&self, style: Style) -> Style {
+        match self.depth {
+            Depth::None => style
+                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::REVERSED),
+            depth => match Tok::Sel.color(depth) {
+                Some(color) => style.bg(color),
+                None => style,
+            },
+        }
+    }
+
     pub fn style(&self, s: S) -> Style {
         let (fg, bg, bold) = Self::parts(s);
         if self.depth == Depth::None {

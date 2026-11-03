@@ -83,7 +83,11 @@ fn run(cli: &app::Cli) -> Result<(), String> {
         env("TERM").as_deref(),
     ));
     let mut model = Model::new(port, config.reconnect);
-    if let Some(notice) = loaded.notice {
+    let names_file = app::names_path(env("XDG_CONFIG_HOME").as_deref(), env("HOME").as_deref());
+    let names = app::load_names(names_file.as_deref());
+    model.set_names(names.names, names.writable);
+    // The first notice wins; both files are reported on the first screen.
+    if let Some(notice) = loaded.notice.or(names.notice) {
         model.notify(notice);
     }
     // The device thread has already delivered the first snapshot.
@@ -98,7 +102,15 @@ fn run(cli: &app::Cli) -> Result<(), String> {
     }
 
     let mut terminal = TerminalGuard::enter().map_err(|e| format!("dps150: terminal: {e}"))?;
-    event_loop(&mut terminal, &mut model, &device, theme, &stop).map_err(|e| format!("dps150: {e}"))
+    event_loop(
+        &mut terminal,
+        &mut model,
+        &device,
+        theme,
+        &stop,
+        names_file.as_deref(),
+    )
+    .map_err(|e| format!("dps150: {e}"))
 }
 
 fn event_loop(
@@ -107,6 +119,7 @@ fn event_loop(
     device: &Device,
     theme: ui::Theme,
     stop: &AtomicBool,
+    names_file: Option<&std::path::Path>,
 ) -> io::Result<()> {
     let begin = Instant::now();
     let mut last_draw = begin;
@@ -129,10 +142,17 @@ fn event_loop(
                 Event::Key(key) if key.kind != KeyEventKind::Release => {
                     if let Some(key) = map_key(key) {
                         dirty = true;
-                        match model.on_key(key) {
+                        let effect = model.on_key(key);
+                        save_names_if_changed(model, names_file);
+                        match effect {
                             Effect::Quit => return Ok(()),
                             Effect::Reconnect => device.send(Command::Reconnect),
                             Effect::Write(write) => device.send(Command::Write(write)),
+                            Effect::Writes(writes) => {
+                                for write in writes {
+                                    device.send(Command::Write(write));
+                                }
+                            }
                             Effect::None => {}
                         }
                     }
@@ -149,6 +169,21 @@ fn event_loop(
             last_draw = Instant::now();
             dirty = false;
         }
+    }
+}
+
+/// Writes `presets.toml` after a rename or a clear (CFG-02). A failure is a
+/// notice; the names stay for the session (APP-05).
+fn save_names_if_changed(model: &mut Model, path: Option<&std::path::Path>) {
+    let Some(names) = model.take_names_to_save() else {
+        return;
+    };
+    let Some(path) = path else {
+        model.notify("Names not saved: no home directory");
+        return;
+    };
+    if let Err(error) = app::save_names(path, &names) {
+        model.notify(format!("Could not save presets.toml: {error}"));
     }
 }
 
