@@ -36,6 +36,8 @@
 !/crates/*/Cargo.toml
 !/crates/*/src/
 !/crates/*/src/*.rs
+!/crates/*/src/bin/
+!/crates/*/src/bin/*.rs
 !/crates/*/tests/
 !/crates/*/tests/*.rs
 !/crates/*/examples/
