@@ -264,6 +264,18 @@ pub enum Parsed {
 /// Parses typed decimal text to thousandths, rounded half up to 10 mV for
 /// voltage and to 1 mA for current.
 pub fn parse_typed(text: &str, quantity: Quantity) -> Parsed {
+    parse_decimal(
+        text,
+        match quantity {
+            Quantity::Voltage => 10,
+            Quantity::Current => 1,
+        },
+    )
+}
+
+/// Parses typed decimal text to thousandths, rounded half up to a multiple
+/// of `step` thousandths.
+pub fn parse_decimal(text: &str, step: u32) -> Parsed {
     if text.is_empty() {
         return Parsed::Empty;
     }
@@ -286,15 +298,11 @@ pub fn parse_typed(text: &str, quantity: Quantity) -> Parsed {
     for place in [100, 10, 1] {
         thousandths = thousandths.saturating_add(digits.next().unwrap_or(0) * place);
     }
-    let round_up = digits.next().is_some_and(|digit| digit >= 5);
-    if round_up {
+    if digits.next().is_some_and(|digit| digit >= 5) {
         thousandths = thousandths.saturating_add(1);
     }
-    let value = match quantity {
-        Quantity::Voltage => (thousandths + 5) / 10 * 10,
-        Quantity::Current => thousandths,
-    };
-    Parsed::Value(value)
+    let step = step.max(1);
+    Parsed::Value(thousandths.saturating_add(step / 2) / step * step)
 }
 
 // ---- texts (DESIGN.md §10) -----------------------------------------------------

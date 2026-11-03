@@ -72,7 +72,7 @@ The same operations exist as library methods on `SimDevice` and as one-line comm
 | `split <n>` | The next `n` frames are written one byte at a time with 20 ms between bytes. Frames that fall due meanwhile wait until the last byte is out: bytes of two frames never interleave |
 | `delay <ms>` | Delay every reply by `<ms>` |
 | `powercycle` | Reset counters and session, keep settings, output off; silent until the next connect frame |
-| `state` | Print the device state, one `name value` per line, then `ok` (so a script can tell where the list ends) |
+| `state` | Print the device state, one `name value` per line (`m1`..`m6` as `V/I`), then `ok` (so a script can tell where the list ends) |
 | `quit` | Exit |
 
 When stdin ends, `dps150-sim` keeps serving; a test kills the process. The binary keeps the slave end of the pty open, so the app can close and reopen the port without the pty vanishing.

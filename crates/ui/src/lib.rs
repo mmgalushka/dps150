@@ -7,6 +7,7 @@ pub mod format;
 pub mod layout;
 mod main_panel;
 mod paint;
+mod secondary;
 pub mod theme;
 mod too_small;
 
@@ -21,10 +22,17 @@ pub use theme::{Depth, S, Theme, detect_depth};
 /// terminal). Layout, band and digit font follow the size (UI-01, UI-12).
 pub fn render(model: &Model, buf: &mut Buffer, theme: Theme) {
     let area = buf.area;
-    let mut painter = paint::Painter { buf, theme };
+    let mut painter = paint::Painter {
+        buf,
+        theme,
+        sel: false,
+    };
     painter.fill(Rect::new(area.x, area.y, area.width, area.height), S::Page);
     match Tier::select(area.width, area.height) {
         Tier::TooSmall => too_small::draw(&mut painter, model, area),
+        tier if model.screen() != app::Screen::Main => {
+            secondary::draw(&mut painter, model, area, tier);
+        }
         tier => main_panel::draw(&mut painter, model, area, tier),
     }
 }

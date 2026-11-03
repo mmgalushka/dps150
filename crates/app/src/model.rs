@@ -13,6 +13,8 @@ use protocol::value::{Milliamps, Millivolts};
 
 use crate::constants::{ENTRY_MAX_CHARS, NOTICE_DURATION};
 use crate::limits::{self, Bounds, Parsed, Quantity, Text};
+use crate::names::Names;
+use crate::screens::{PresetsState, Prompt, ProtectionState, Screen};
 
 /// Which readout has the focus (EDT-01).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,7 +49,7 @@ pub enum Key {
 }
 
 /// What the caller must do after a key.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Effect {
     None,
     Quit,
@@ -55,6 +57,8 @@ pub enum Effect {
     Reconnect,
     /// Send this write to the device thread.
     Write(Write),
+    /// Send these writes in order (a recall, a slot).
+    Writes(Vec<Write>),
 }
 
 /// What the screens show of the link (LNK-02).
@@ -91,7 +95,7 @@ pub struct Entry {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Notice {
+pub(crate) struct Notice {
     text: Text,
     tone: Tone,
     /// `None`: stays until the next key press.
@@ -109,11 +113,19 @@ pub struct Model {
     voltage_cursor: usize,
     current_cursor: usize,
     entry: Option<Entry>,
-    notice: Option<Notice>,
+    pub(crate) notice: Option<Notice>,
     /// Values chosen by the user and not yet read back.
-    pending: Vec<Write>,
-    now: Duration,
+    pub(crate) pending: Vec<Write>,
+    pub(crate) now: Duration,
     reconnect: bool,
+    pub(crate) screen: Screen,
+    pub(crate) presets: PresetsState,
+    pub(crate) protection: ProtectionState,
+    pub(crate) names: Names,
+    pub(crate) names_writable: bool,
+    pub(crate) names_dirty: bool,
+    pub(crate) prompt: Option<Prompt>,
+    pub(crate) chord: bool,
 }
 
 impl Model {
@@ -132,7 +144,22 @@ impl Model {
             pending: Vec::new(),
             now: Duration::ZERO,
             reconnect,
+            screen: Screen::Main,
+            presets: PresetsState::default(),
+            protection: ProtectionState::default(),
+            names: Default::default(),
+            names_writable: true,
+            names_dirty: false,
+            prompt: None,
+            chord: false,
         }
+    }
+
+    /// The slot names read from `presets.toml`; `writable` is false when the
+    /// file is invalid and must not be overwritten (APP-05).
+    pub fn set_names(&mut self, names: Names, writable: bool) {
+        self.names = names;
+        self.names_writable = writable;
     }
 
     pub fn set_reconnect(&mut self, on: bool) {
@@ -155,7 +182,7 @@ impl Model {
         );
     }
 
-    fn set_notice(&mut self, text: Text, tone: Tone, expires: Option<Duration>) {
+    pub(crate) fn set_notice(&mut self, text: Text, tone: Tone, expires: Option<Duration>) {
         self.notice = Some(Notice {
             text,
             tone,
@@ -163,7 +190,7 @@ impl Model {
         });
     }
 
-    fn same_notice(&mut self, text: &str, tone: Tone, expires: Option<Duration>) {
+    pub(crate) fn same_notice(&mut self, text: &str, tone: Tone, expires: Option<Duration>) {
         self.set_notice(
             Text {
                 standard: text.to_string(),
@@ -200,6 +227,12 @@ impl Model {
                 self.entry = None;
                 self.pending.clear();
                 self.notice = None;
+                self.prompt = None;
+                self.chord = false;
+                if matches!(self.presets.mode, crate::screens::PresetMode::Edit(_)) {
+                    self.presets.mode = crate::screens::PresetMode::List;
+                }
+                self.protection.mode = crate::screens::ProtectionMode::Selecting;
             }
             Message::Event(Event::ReadBack { written, device }) => self.read_back(written, device),
             Message::Event(Event::WriteRefused { why, .. }) => {
@@ -281,6 +314,17 @@ impl Model {
             return Some(Line {
                 text: pick(&notice.text),
                 tone: notice.tone,
+            });
+        }
+        if self.chord {
+            let text = if compact {
+                "Recall which? 1-6, Esc"
+            } else {
+                "Recall which preset? 1-6, Esc cancels"
+            };
+            return Some(Line {
+                text: text.into(),
+                tone: Tone::Warn,
             });
         }
         let dump = &self.snapshot.as_ref()?.dump;
@@ -374,10 +418,25 @@ impl Model {
     pub fn on_key(&mut self, key: Key) -> Effect {
         // Any key clears a notice or a rejection (§5.12).
         self.notice = None;
+        if self.screen != Screen::Main || self.prompt.is_some() || self.chord {
+            return self.secondary_key(key);
+        }
         if self.entry.is_some() {
             return self.entry_key(key);
         }
         match key {
+            Key::Char('p') => {
+                self.open_screen(Screen::Presets);
+                Effect::None
+            }
+            Key::Char('o') => {
+                self.open_screen(Screen::Protection);
+                Effect::None
+            }
+            Key::Char('m') => {
+                self.start_chord();
+                Effect::None
+            }
             Key::Char('q') | Key::CtrlC => Effect::Quit,
             Key::Tab => {
                 self.toggle_focus();
@@ -435,7 +494,7 @@ impl Model {
     }
 
     /// Edits need an online link and a dump to start from (LNK-03).
-    fn editable(&mut self) -> bool {
+    pub(crate) fn editable(&mut self) -> bool {
         if !self.is_online() {
             self.link_down_notice();
             return false;
@@ -446,11 +505,11 @@ impl Model {
     /// While the output is ON a setpoint change would reach the load at once;
     /// the confirmations that guard that come with the output milestone, so
     /// nothing is sent.
-    fn output_is_on(&self) -> bool {
+    pub(crate) fn output_is_on(&self) -> bool {
         self.snapshot.as_ref().is_some_and(|s| s.dump.output_on)
     }
 
-    fn block_while_on(&mut self) {
+    pub(crate) fn block_while_on(&mut self) {
         self.same_notice(
             "Output is ON: changes are not sent yet",
             Tone::Warn,
@@ -511,10 +570,15 @@ impl Model {
             Quantity::Voltage => Write::SetVoltage(Millivolts::new(value)),
             Quantity::Current => Write::SetCurrent(Milliamps::new(value)),
         };
+        self.stage_write(write);
+        Effect::Write(write)
+    }
+
+    /// Shows `write` at once, until the read-back replaces it (EDT-04).
+    pub(crate) fn stage_write(&mut self, write: Write) {
         self.pending
             .retain(|pending| pending.register() != write.register());
         self.pending.push(write);
-        Effect::Write(write)
     }
 
     fn entry_key(&mut self, key: Key) -> Effect {

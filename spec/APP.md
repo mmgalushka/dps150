@@ -93,6 +93,10 @@ The `device` layer owns the link. States and transitions:
 - **Model.** The UI/app thread owns one model snapshot; the renderer reads only that snapshot (§2).
 - **Output OFF has priority.** An output-OFF command (`Space`, `Ctrl-X`, a prompt cancel) goes to the front of the queue, bypasses the 50 ms SET coalescing (DESIGN.md §7.1, `SAF-07`) and is never dropped or merged away. While the link is down it becomes the queued OFF of SAFETY.md §3.1. {#APP-09}
 
+### 7.0 Screens and keys in `app`
+
+`Model` owns the screen (`Main`, `Presets`, `Protection`), the Presets list state (list, edit, rename), the Protection state (selecting, editing, typed), the prompt and the recall chord. A key returns an `Effect`: `Write`, `Writes` (a recall or a slot, sent in order), `Quit` or `Reconnect`. Names to store are taken with `take_names_to_save`, so the effect stays about the device. A link loss ends typed entry, a prompt, the chord and any edit, and drops every unconfirmed value.
+
 ### 7.1 Interface of the device crate
 
 - **Writes (M5a).** `Link::write(Write)` queues a setpoint, preset or limit write. It refuses (`Event::WriteRefused`, counted in `LinkStats::refused_writes`) when the link is not online with a full dump, or when the value exceeds the device range (`E4` for voltages, `E3` for currents, `E4`..`E8` for limits). A second write to the same register replaces the first before it is sent; at most one SET goes out per `SET_GAP`, so the 50 ms `SET_COALESCE` of §8 is subsumed by it. The first poll after the gap carries the read-back: its dump yields one `Event::ReadBack { written, device }` per write, and `Write::differs_from` decides whether the app says `Device kept …` (PRT-03). A link loss drops everything queued.

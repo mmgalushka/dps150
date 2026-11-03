@@ -16,7 +16,7 @@ const MAX_POWER: f32 = 150.0;
 
 /// Output state as the badges show it (§5.5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Output {
+pub(crate) enum Output {
     On,
     Off,
     Unknown,
@@ -24,45 +24,45 @@ enum Output {
 
 /// Which mode badge is lit (§6.4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Lit {
+pub(crate) enum Lit {
     Cv,
     Cc,
     Neither,
 }
 
 /// What the screen needs, taken from the model once per frame.
-struct View {
-    online: bool,
-    auto_reconnect: bool,
-    output: Output,
-    lit: Lit,
+pub(crate) struct View {
+    pub(crate) online: bool,
+    pub(crate) auto_reconnect: bool,
+    pub(crate) output: Output,
+    pub(crate) lit: Lit,
     /// `DC`: 0 none, 1 OVP .. 5 LVP.
-    protection: u8,
-    set_voltage: Option<Millivolts>,
-    set_current: Option<Milliamps>,
+    pub(crate) protection: u8,
+    pub(crate) set_voltage: Option<Millivolts>,
+    pub(crate) set_current: Option<Milliamps>,
     /// Live readings; `None` while the link is down or before any data.
-    measured: Option<(f32, f32, f32)>,
-    vin: Option<f32>,
-    temperature: Option<f32>,
-    capacity: Option<f32>,
-    energy: Option<f32>,
-    live_max_voltage: Option<Millivolts>,
-    live_max_current: Option<Milliamps>,
-    presets: Option<[(Millivolts, Milliamps); 6]>,
-    model_name: String,
-    firmware: Option<String>,
-    hardware: Option<String>,
-    port: String,
+    pub(crate) measured: Option<(f32, f32, f32)>,
+    pub(crate) vin: Option<f32>,
+    pub(crate) temperature: Option<f32>,
+    pub(crate) capacity: Option<f32>,
+    pub(crate) energy: Option<f32>,
+    pub(crate) live_max_voltage: Option<Millivolts>,
+    pub(crate) live_max_current: Option<Milliamps>,
+    pub(crate) presets: Option<[(Millivolts, Milliamps); 6]>,
+    pub(crate) model_name: String,
+    pub(crate) firmware: Option<String>,
+    pub(crate) hardware: Option<String>,
+    pub(crate) port: String,
     /// Typed entry in progress: focus, text, refused.
-    entry: Option<(Focus, String, bool)>,
+    pub(crate) entry: Option<(Focus, String, bool)>,
     /// The message line: a notice, a hint or the live-maximum warning.
-    message: Option<(String, Tone)>,
-    focus: Focus,
-    cursors: [usize; 2],
+    pub(crate) message: Option<(String, Tone)>,
+    pub(crate) focus: Focus,
+    pub(crate) cursors: [usize; 2],
 }
 
 impl View {
-    fn new(model: &Model, compact: bool) -> Self {
+    pub(crate) fn new(model: &Model, compact: bool) -> Self {
         let online = model.is_online();
         let auto_reconnect = matches!(
             model.link,
@@ -122,7 +122,7 @@ impl View {
         }
     }
 
-    fn tripped(&self) -> bool {
+    pub(crate) fn tripped(&self) -> bool {
         self.online && self.protection != 0
     }
 }
@@ -149,7 +149,7 @@ fn short_port(path: &str) -> String {
 
 // ---- header ----------------------------------------------------------------
 
-fn header(p: &mut Painter, view: &View, x: u16, y: u16, width: u16, tier: Tier) {
+pub(crate) fn header(p: &mut Painter, view: &View, x: u16, y: u16, width: u16, tier: Tier) {
     p.fill(Rect::new(x, y, width, 1), S::Hd);
     let (label, label_style) = if !view.online {
         (" ○ no link ", S::Her)
@@ -218,32 +218,38 @@ fn item_width(key: &str, label: &str) -> usize {
     key.chars().count() + label.chars().count() + 5
 }
 
-/// The key bar algorithm of DESIGN.md §5.8 for layout width `layout_width`.
-fn key_bar_items(layout_width: usize) -> Vec<(&'static str, &'static str)> {
-    let mut room = layout_width.saturating_sub(item_width(TAIL.0, TAIL.1));
-    let mut items = Vec::new();
-    for (key, label) in KEYS {
+/// The key bar algorithm of DESIGN.md §5.8: the tail is reserved first, then
+/// items are added in priority order while they fit.
+pub(crate) fn fit_items<'a>(
+    layout_width: usize,
+    items: &[(&'a str, &'a str)],
+    tail: &[(&'a str, &'a str)],
+) -> Vec<(&'a str, &'a str)> {
+    let reserved: usize = tail.iter().map(|(k, l)| item_width(k, l)).sum();
+    let mut room = layout_width.saturating_sub(reserved);
+    let mut fitted = Vec::new();
+    for (key, label) in items {
         let width = item_width(key, label);
         if width > room {
             break;
         }
         room -= width;
-        items.push((key, label));
+        fitted.push((*key, *label));
     }
-    items.push(TAIL);
-    items
+    fitted.extend_from_slice(tail);
+    fitted
+}
+
+fn key_bar_items(layout_width: usize) -> Vec<(&'static str, &'static str)> {
+    fit_items(layout_width, &KEYS, &[TAIL])
 }
 
 /// While typed entry is open the bar is replaced; there is no `? help`
 /// because `?` is not a typed character (§5.8).
 const ENTRY_KEYS: [(&str, &str); 3] = [("⏎", "apply"), ("Esc", "cancel"), ("Space", "off")];
 
-fn key_bar(p: &mut Painter, x: u16, y: u16, layout_width: u16, entry: bool) {
-    let items = if entry {
-        ENTRY_KEYS.to_vec()
-    } else {
-        key_bar_items(usize::from(layout_width))
-    };
+/// Draws the items of a key bar starting at `x`.
+pub(crate) fn draw_key_items(p: &mut Painter, x: u16, y: u16, items: &[(&str, &str)]) {
     let mut column = x;
     for (key, label) in items {
         let cap = format!(" {key} ");
@@ -252,9 +258,18 @@ fn key_bar(p: &mut Painter, x: u16, y: u16, layout_width: u16, entry: bool) {
     }
 }
 
+fn key_bar(p: &mut Painter, x: u16, y: u16, layout_width: u16, entry: bool) {
+    let items = if entry {
+        ENTRY_KEYS.to_vec()
+    } else {
+        key_bar_items(usize::from(layout_width))
+    };
+    draw_key_items(p, x, y, &items);
+}
+
 // ---- pieces shared by the tiers ----------------------------------------------
 
-fn badge(p: &mut Painter, x: u16, y: u16, text: &str, s: S) -> u16 {
+pub(crate) fn badge(p: &mut Painter, x: u16, y: u16, text: &str, s: S) -> u16 {
     p.text(x, y, &format!(" {text} "), s)
 }
 
@@ -325,7 +340,7 @@ fn lost_spans(view: &View, compact: bool) -> Vec<(String, S)> {
 }
 
 /// The message line text in its tone (§5.12).
-fn message_style(tone: Tone) -> S {
+pub(crate) fn message_style(tone: Tone) -> S {
     match tone {
         Tone::Warn => S::Wn,
         Tone::Error => S::Er,
@@ -340,21 +355,18 @@ fn draw_spans(p: &mut Painter, x: u16, y: u16, spans: &[(String, S)]) -> u16 {
 
 // ---- Compact -----------------------------------------------------------------
 
+/// The Compact header: content for 44 cells, the fill reaching both edges of
+/// the terminal (§2.3).
+pub(crate) fn compact_header(p: &mut Painter, view: &View, area: Rect) {
+    let x0 = area.x + area.width.saturating_sub(COMPACT_WIDTH) / 2;
+    p.fill(Rect::new(area.x, area.y, area.width, 1), S::Hd);
+    header(p, view, x0, area.y, COMPACT_WIDTH, Tier::Compact);
+}
+
 fn compact(p: &mut Painter, view: &View, area: Rect) {
     let x0 = area.x + area.width.saturating_sub(COMPACT_WIDTH) / 2;
     let y0 = area.y;
-    header(p, view, x0, y0, COMPACT_WIDTH, Tier::Compact);
-    // The header's fill reaches both edges of the terminal.
-    p.fill(Rect::new(area.x, y0, x0 - area.x, 1), S::Hd);
-    p.fill(
-        Rect::new(
-            x0 + COMPACT_WIDTH,
-            y0,
-            (area.x + area.width).saturating_sub(x0 + COMPACT_WIDTH),
-            1,
-        ),
-        S::Hd,
-    );
+    compact_header(p, view, area);
 
     compact_readout(p, view, Rect::new(x0, y0 + 1, 22, 7), Focus::Voltage);
     compact_readout(p, view, Rect::new(x0 + 22, y0 + 1, 22, 7), Focus::Current);

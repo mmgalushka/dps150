@@ -114,6 +114,7 @@ Built in two parts, each its own branch and pull request, because together they 
 - Secondary-screen frame (header, strip, key bar), the Presets and Protection screens, the `m` recall chord, overwrite and clear prompts, `presets.toml` and rename.
 - Requirements: PRE-01 to PRE-04, CFG-02, SAF-12, EDT-07, and the rest of LIM-05 and LIM-06.
 - *Exit:* the stage 2 gate. Goldens `presets-*` and `protection-*` pass. Before and after a session on the unit, a dump comparison shows only the intended changes.
+- **Status:** built 2026-11-03 on branch `m5b/presets-protection`: the secondary-screen frame and live strip, the Presets screen (list, edit, rename, save, clear, recall, the `m` chord), the Protection screen (select, edit, typed entry, defaults, validation, stored violations), `presets.toml`. Goldens `presets-{compact,standard,120x40}` and `protection-{compact,standard,120x40}` pass; 31 level 2 tests. **Open: the stage 2 gate itself** (dump comparison on the real unit) is a manual step. Like M5a, a recall while the output is ON is held back until M6.
 
 ### M6. Output control (stage 3)
 - Output ON and OFF, prompts, jump guard, recall prompt, too-small rules, OFF priority, tripped state, queued OFF and reconnect, quit, signals.

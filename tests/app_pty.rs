@@ -636,3 +636,254 @@ fn saf_03_while_the_output_is_on_a_change_is_held_back() {
     tui.send(b"q");
     assert_eq!(tui.wait_exit(), 0);
 }
+
+// ---- Presets and Protection ----------------------------------------------------------
+
+const ENTER: &[u8] = b"\r";
+
+fn config_dir(tag: &str, files: &[(&str, &str)]) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("dps150-{tag}-{}", std::process::id()));
+    std::fs::create_dir_all(dir.join("dps150")).unwrap();
+    for (name, text) in files {
+        std::fs::write(dir.join("dps150").join(name), text).unwrap();
+    }
+    dir
+}
+
+#[test]
+fn pre_01_the_presets_screen_lists_the_device_slots_and_esc_goes_back() {
+    let sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b"p");
+    for text in [
+        "PRESETS",
+        "╭─ Presets",
+        "device M1–M6",
+        "5.00 V  1.00 A",
+        "(no preset matches)",
+    ] {
+        tui.wait_for(text);
+    }
+    tui.send(b"\x1b");
+    tui.wait_for("MEASURED");
+    tui.gone("PRESETS");
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn pre_01_editing_a_slot_writes_both_values_to_the_device_and_nothing_else() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b"p");
+    tui.wait_for("PRESETS");
+    tui.send(b"\x1b[B\x1b[B"); // M3
+    tui.send(b"e");
+    tui.wait_for("⏎  write");
+    tui.send(UP); // voltage units: 5 V -> 6 V
+    tui.send(b"\t");
+    tui.send(UP); // current tenths: 1.0 A -> 1.1 A
+    tui.send(ENTER);
+    sim.wait_state("m3", "6/1.1");
+    let state = sim.state();
+    assert_eq!(state["m1"], "5/1");
+    assert_eq!(state["vset"], "3.3", "the setpoints are untouched");
+    assert_eq!(state["dropped"], "0");
+    tui.wait_for("6.00 V  1.10 A");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn pre_01_recall_writes_the_setpoints_by_the_list_and_by_the_chord() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    // Make M2 distinctive first: 6 V / 1 A via the list editor.
+    tui.send(b"p");
+    tui.send(b"\x1b[B");
+    tui.send(b"e");
+    tui.send(UP);
+    tui.send(ENTER);
+    sim.wait_state("m2", "6/1");
+    // Recall it from the list.
+    tui.send(ENTER);
+    sim.wait_state("vset", "6");
+    tui.wait_for("Recalled M2 · 6.00 V / 1.000 A");
+    // And M1 from the main panel by the chord.
+    tui.send(b"\x1b");
+    thread::sleep(Duration::from_millis(300));
+    tui.send(b"m");
+    tui.wait_for("Recall which preset? 1-6, Esc cancels");
+    tui.send(b"1");
+    sim.wait_state("vset", "5");
+    sim.wait_state("iset", "1");
+    assert_eq!(sim.state()["dropped"], "0");
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_12_save_asks_first_and_a_no_changes_nothing() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b"p");
+    tui.send(b"s");
+    tui.wait_for("Overwrite M1?  5.00 V/1.000 A → 3.30 V/2.000 A");
+    tui.send(b"n");
+    tui.wait_for("recall");
+    thread::sleep(Duration::from_millis(400));
+    assert_eq!(sim.state()["m1"], "5/1");
+    tui.send(b"s");
+    tui.wait_for("Overwrite M1?");
+    tui.send(b"y");
+    sim.wait_state("m1", "3.3/2");
+    assert_eq!(sim.state()["dropped"], "0");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn pre_04_a_name_is_kept_in_presets_toml_and_comes_back_on_the_next_start() {
+    let dir = config_dir("names", &[]);
+    let xdg = dir.to_str().unwrap().to_string();
+    let sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[("XDG_CONFIG_HOME", &xdg)]);
+    tui.wait_for("connected");
+    tui.send(b"p");
+    tui.send(b"n");
+    tui.wait_for("⏎  save");
+    tui.send(b"bench psu");
+    tui.send(ENTER);
+    tui.wait_for("bench psu");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+    let text = std::fs::read_to_string(dir.join("dps150/presets.toml")).unwrap();
+    assert!(text.contains("bench psu"), "{text}");
+    assert!(!text.contains("5.0"), "voltages are never stored: {text}");
+
+    let mut tui = Tui::start(&sim, &[("XDG_CONFIG_HOME", &xdg)]);
+    tui.wait_for("connected");
+    tui.send(b"p");
+    tui.wait_for("bench psu");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn app_05_an_invalid_presets_file_is_reported_and_never_overwritten() {
+    let broken = "names = 3\n";
+    let dir = config_dir("badnames", &[("presets.toml", broken)]);
+    let xdg = dir.to_str().unwrap().to_string();
+    let sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[("XDG_CONFIG_HOME", &xdg)]);
+    tui.wait_for("presets.toml: line 1: invalid value; using defaults");
+    tui.send(b"p");
+    tui.send(b"n");
+    tui.send(b"x");
+    tui.send(ENTER);
+    tui.wait_for("Names not saved: presets.toml is invalid");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+    assert_eq!(
+        std::fs::read_to_string(dir.join("dps150/presets.toml")).unwrap(),
+        broken
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn lim_05_a_protection_limit_is_edited_with_the_arrows_and_written_on_enter() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b"o");
+    for text in [
+        "PROTECTION",
+        "Protection limits",
+        "no protection tripped",
+        "Selected OVP",
+    ] {
+        tui.wait_for(text);
+    }
+    tui.send(ENTER);
+    tui.wait_for("Editing OVP");
+    tui.send(DOWN); // units digit: 30 V -> 29 V
+    tui.send(ENTER);
+    sim.wait_state("ovp", "29");
+    tui.wait_for("Selected OVP");
+    tui.wait_for("29.00 V");
+    assert_eq!(sim.state()["dropped"], "0");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn lim_05_an_invalid_candidate_cannot_be_applied() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b"o\x1b[B"); // OCP
+    tui.send(ENTER);
+    tui.wait_for("Editing OCP");
+    // 5.10 A -> 2.10 A -> 1.10 A, below the 2.000 A current setpoint.
+    tui.send(DOWN);
+    tui.send(DOWN);
+    tui.send(DOWN);
+    tui.send(DOWN);
+    tui.wait_for("✗ OCP not above it");
+    tui.send(ENTER);
+    thread::sleep(Duration::from_millis(500));
+    assert_eq!(sim.state()["ocp"], "5.1", "enter is disabled while invalid");
+    tui.wait_for("Editing OCP");
+    tui.send(UP);
+    tui.wait_for("✓ OCP stays above it");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn pro_typed_values_are_applied_r_loads_the_default_and_a_kept_value_is_shown() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b"o");
+    tui.wait_for("Selected OVP");
+    // Typed: 1, 2 and Enter set OVP to 12 V.
+    tui.send(b"12");
+    tui.send(ENTER);
+    sim.wait_state("ovp", "12");
+    // From now on the device keeps 12 V whatever it is sent.
+    sim.command("keep D1 12.0");
+    tui.send(b"r");
+    tui.wait_for("! default is the device maximum: no protection");
+    tui.send(ENTER);
+    tui.wait_for("Device kept 12.00 V");
+    assert_eq!(sim.state()["ovp"], "12");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn lnk_03_with_the_link_down_the_secondary_screens_still_show_and_refuse_edits() {
+    let mut sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b"p");
+    tui.wait_for("PRESETS");
+    sim.command("unplug");
+    tui.wait_for("no link");
+    tui.wait_for("-.--- V");
+    tui.send(b"s");
+    tui.wait_for("Link down. Changes are not sent.");
+    sim.command("plug");
+    tui.wait_for("connected");
+    thread::sleep(Duration::from_millis(500));
+    assert_eq!(sim.state()["m1"], "5/1");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
