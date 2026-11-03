@@ -87,6 +87,7 @@ A supervised session with the user at the unit, driven by `hw_probe`. Every writ
 - `SimDevice`, then `dps150-sim` with pty and stdin commands, built on H1's facts.
 - Requirements: SIM-01 to SIM-12.
 - *Exit:* the conformance test against the capture passes (SIM-12).
+- **Status:** done 2026-11-03 on branch `m2/simulator`: `SimDevice`, the command language, `dps150-sim` on a pty, 39 behaviour tests, the capture conformance test and 5 level 2 tests against the binary.
 
 ### M3. Device core (stage 1)
 - The pure link state machine, then the thread and serial transport. In this stage it has no write path except the connect frame and GET.
