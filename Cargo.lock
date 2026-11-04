@@ -256,6 +256,7 @@ version = "0.0.0"
 dependencies = [
  "app",
  "device",
+ "libc",
  "ratatui",
  "serialport",
  "signal-hook 0.4.6",

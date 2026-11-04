@@ -5,6 +5,7 @@
 
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Read, Write};
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -276,6 +277,19 @@ impl Tui {
             .stderr(Stdio::from(tty()));
         for (name, value) in envs {
             command.env(name, value);
+        }
+        // Make the test pty the app's controlling terminal. crossterm reads
+        // the size and the keys from /dev/tty, so without this the app would
+        // see whatever terminal `cargo test` itself is run from.
+        // SAFETY: only async-signal-safe calls (setsid, ioctl) run between
+        // fork and exec; fd 0 is the pty slave by then.
+        unsafe {
+            command.pre_exec(|| {
+                if libc::setsid() < 0 || libc::ioctl(0, libc::TIOCSCTTY as _, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
         }
         let child = command.spawn().expect("start dps150");
 

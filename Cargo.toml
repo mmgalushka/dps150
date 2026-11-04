@@ -40,6 +40,7 @@ signal-hook = "0.4.6"
 [dev-dependencies]
 serialport = "4.10.1"
 device.workspace = true
+libc = "0.2"
 vt100 = "0.18.1"
 
 [package.metadata.deb]
