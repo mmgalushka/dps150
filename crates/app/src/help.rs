@@ -179,6 +179,31 @@ pub fn help_for(screen: Screen) -> Help {
                 ],
             ]),
         },
+        Screen::Settings => Help {
+            name: "settings",
+            edit: vec![
+                ("↑↓", "select a row"),
+                ("←→", "change the value"),
+                ("Tab", "next group"),
+                ("Esc", "back"),
+            ],
+            screens: SCREENS_BACK.to_vec(),
+            glossary: vec![
+                "Brightness and volume are saved on the device.",
+                "The other settings are saved in config.toml.",
+            ],
+            compact: compact(&[
+                &["Edit", "↑↓ select row   ←→ change value", "Esc back"],
+                &COMPACT_SCREENS,
+                &[
+                    "",
+                    "Glossary",
+                    "Brightness and volume are saved",
+                    "on the device; the other settings",
+                    "in config.toml.",
+                ],
+            ]),
+        },
     }
 }
 
@@ -186,7 +211,12 @@ pub fn help_for(screen: Screen) -> Help {
 mod tests {
     use super::*;
 
-    const ALL: [Screen; 3] = [Screen::Main, Screen::Presets, Screen::Protection];
+    const ALL: [Screen; 4] = [
+        Screen::Main,
+        Screen::Presets,
+        Screen::Protection,
+        Screen::Settings,
+    ];
 
     #[test]
     fn ui_08_each_screen_has_a_whole_number_of_compact_pages_and_more_than_one() {

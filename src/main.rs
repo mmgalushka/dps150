@@ -56,7 +56,7 @@ fn run(cli: &app::Cli) -> Result<u8, String> {
     }
     let path = app::config_path(env("XDG_CONFIG_HOME").as_deref(), env("HOME").as_deref());
     let loaded = app::load_config(path.as_deref());
-    let config = loaded.config;
+    let config = loaded.config.clone();
 
     let ports = serialport::available_ports()
         .unwrap_or_default()
@@ -78,14 +78,23 @@ fn run(cli: &app::Cli) -> Result<u8, String> {
     };
     let device = Device::start(&port, link).map_err(|e| e.to_string())?;
 
-    let theme = ui::Theme::new(ui::detect_depth(
-        env("NO_COLOR").as_deref(),
-        config.colors,
-        env("COLORTERM").as_deref(),
-        env("TERM").as_deref(),
-    ));
+    let depth_for = |setting| {
+        ui::detect_depth(
+            env("NO_COLOR").as_deref(),
+            setting,
+            env("COLORTERM").as_deref(),
+            env("TERM").as_deref(),
+        )
+    };
+    let detected = match depth_for(app::ColorSetting::Auto) {
+        ui::Depth::TrueColor => "24-bit",
+        ui::Depth::Indexed256 => "256",
+        ui::Depth::Ansi16 => "16",
+        ui::Depth::None => "off",
+    };
     let mut model = Model::new(port, config.reconnect);
-    model.set_safety(config.safety());
+    model.set_config(config, loaded.notice.is_none());
+    model.set_detected_colours(detected);
     let names_file = app::names_path(env("XDG_CONFIG_HOME").as_deref(), env("HOME").as_deref());
     let names = app::load_names(names_file.as_deref());
     model.set_names(names.names, names.writable);
@@ -113,9 +122,9 @@ fn run(cli: &app::Cli) -> Result<u8, String> {
         &mut terminal,
         &mut model,
         &device,
-        theme,
+        &depth_for,
         &stop,
-        names_file.as_deref(),
+        (names_file.as_deref(), path.as_deref()),
     );
     // Leave the alternate screen first: the line below is the last thing
     // written (SAF-11).
@@ -152,10 +161,11 @@ fn event_loop(
     terminal: &mut TerminalGuard,
     model: &mut Model,
     device: &Device,
-    theme: ui::Theme,
+    depth_for: &dyn Fn(app::ColorSetting) -> ui::Depth,
     stop: &AtomicBool,
-    names_file: Option<&std::path::Path>,
+    files: (Option<&std::path::Path>, Option<&std::path::Path>),
 ) -> io::Result<Outcome> {
+    let (names_file, config_file) = files;
     let begin = Instant::now();
     let mut last_draw = begin;
     let mut dirty = true;
@@ -195,7 +205,9 @@ fn event_loop(
         // Below the floor only OFF and Ctrl-C work, and nothing pending
         // survives (SAF-09, SAF-10).
         if let Ok((cols, rows)) = ratatui::crossterm::terminal::size() {
-            model.set_too_small(ui::Tier::select(cols, rows) == ui::Tier::TooSmall);
+            let tier = ui::Tier::select(cols, rows);
+            model.set_too_small(tier == ui::Tier::TooSmall);
+            model.set_compact(tier == ui::Tier::Compact);
         }
         if event::poll(FRAME)? {
             match event::read()? {
@@ -211,6 +223,7 @@ fn event_loop(
                         } else {
                             let effect = model.on_key(key);
                             save_names_if_changed(model, names_file);
+                            save_config_if_changed(model, device, config_file);
                             match effect {
                                 Effect::Quit => {
                                     shutdown = Some(begin_shutdown(model, device, now, false));
@@ -239,6 +252,7 @@ fn event_loop(
             return Ok(outcome.clone());
         }
         if dirty || last_draw.elapsed() >= REDRAW {
+            let theme = ui::Theme::new(depth_for(model.config().colors));
             terminal
                 .0
                 .draw(|frame| ui::render(model, frame.buffer_mut(), theme))?;
@@ -260,6 +274,23 @@ fn save_names_if_changed(model: &mut Model, path: Option<&std::path::Path>) {
     };
     if let Err(error) = app::save_names(path, &names) {
         model.notify(format!("Could not save presets.toml: {error}"));
+    }
+}
+
+/// Writes `config.toml` after a Settings change and passes the live ones to
+/// the device thread. A failure is a notice; the value stays for the session.
+fn save_config_if_changed(model: &mut Model, device: &Device, path: Option<&std::path::Path>) {
+    let Some(config) = model.take_config_to_save() else {
+        return;
+    };
+    device.send(Command::Refresh(config.refresh_hz));
+    device.send(Command::AutoReconnect(config.reconnect));
+    let Some(path) = path else {
+        model.notify("Settings not saved: no home directory");
+        return;
+    };
+    if let Err(error) = app::save_config(path, &config) {
+        model.notify(format!("Could not save config.toml: {error}"));
     }
 }
 

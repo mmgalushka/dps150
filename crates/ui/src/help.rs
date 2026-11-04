@@ -32,10 +32,7 @@ pub(crate) fn draw(p: &mut Painter, model: &Model, area: Rect, tier: Tier) {
         header(p, &view, area.x, area.y, area.width, tier);
     }
     if secondary {
-        let name = match model.screen() {
-            Screen::Presets => "PRESETS",
-            _ => "PROTECTION",
-        };
+        let name = secondary::screen_name(model.screen());
         secondary::strip(p, &view, area, x0, width, name);
     }
     let top = area.y + if secondary { 2 } else { 1 };

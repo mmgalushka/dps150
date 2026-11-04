@@ -4,9 +4,9 @@
 
 use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub enum ColorSetting {
     #[default]
     #[serde(rename = "auto")]
@@ -21,7 +21,7 @@ pub enum ColorSetting {
     None,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputOn {
     #[default]
@@ -29,7 +29,7 @@ pub enum OutputOn {
     Immediate,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OnExit {
     #[default]
@@ -38,7 +38,7 @@ pub enum OnExit {
 }
 
 /// The keys of APP.md §4.1.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Config {
     pub theme: String,
@@ -152,6 +152,16 @@ pub(crate) fn parse_config(text: &str) -> Loaded {
     }
 }
 
+/// Writes the config (APP-05). The caller never calls this for an invalid
+/// file. Comments and unknown keys in the old file are not kept.
+pub fn save_config(path: &std::path::Path, config: &Config) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let text = toml::to_string(config).map_err(std::io::Error::other)?;
+    std::fs::write(path, text)
+}
+
 fn line_of(text: &str, key: &str) -> usize {
     text.lines()
         .position(|line| line.trim_start().starts_with(key))
@@ -178,6 +188,24 @@ mod tests {
             Some(PathBuf::from("/h/.config/dps150/config.toml"))
         );
         assert_eq!(config_path(None, None), None);
+    }
+
+    #[test]
+    fn cfg_01_a_saved_config_loads_back_the_same() {
+        let dir = std::env::temp_dir().join(format!("dps150-cfg-{}", std::process::id()));
+        let path = dir.join("dps150").join("config.toml");
+        let config = Config {
+            colors: ColorSetting::Indexed256,
+            v_jump: 0.0,
+            refresh_hz: 2,
+            reconnect: false,
+            ..Config::default()
+        };
+        save_config(&path, &config).unwrap();
+        let loaded = load_config(Some(&path));
+        assert_eq!(loaded.config, config);
+        assert_eq!(loaded.notice, None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

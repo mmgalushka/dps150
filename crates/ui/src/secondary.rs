@@ -31,19 +31,26 @@ pub(crate) fn draw(p: &mut Painter, model: &Model, area: Rect, tier: Tier) {
     } else {
         header(p, &view, area.x, area.y, area.width, tier);
     }
-    let name = match model.screen() {
-        Screen::Presets => "PRESETS",
-        _ => "PROTECTION",
-    };
+    let name = screen_name(model.screen());
     strip(p, &view, area, x0, width, name);
 
     let body_y = area.y + 2;
     let (bar_y, body_h) = if compact {
-        (area.y + 15, 0)
+        // Settings is shorter than the 16-row Compact frame (`settings-compact`).
+        let bar = if model.screen() == Screen::Settings {
+            12
+        } else {
+            15
+        };
+        (area.y + bar, 0)
     } else {
         (area.y + area.height - 1, area.height - 3)
     };
     match (model.screen(), compact) {
+        (Screen::Settings, false) => {
+            crate::settings::fluid(p, model, &view, Rect::new(x0, body_y, width, body_h))
+        }
+        (Screen::Settings, true) => crate::settings::compact(p, model, x0, body_y),
         (Screen::Presets, false) => {
             presets_fluid(p, model, &view, Rect::new(x0, body_y, width, body_h))
         }
@@ -52,6 +59,14 @@ pub(crate) fn draw(p: &mut Painter, model: &Model, area: Rect, tier: Tier) {
         (_, true) => protection_compact(p, model, &view, x0, body_y),
     }
     bottom_row(p, model, x0, bar_y, width, compact);
+}
+
+pub(crate) fn screen_name(screen: Screen) -> &'static str {
+    match screen {
+        Screen::Presets => "PRESETS",
+        Screen::Settings => "SETTINGS",
+        _ => "PROTECTION",
+    }
 }
 
 // ---- strip (§5.10) --------------------------------------------------------------
@@ -124,6 +139,19 @@ type Keys = Vec<(&'static str, &'static str)>;
 fn key_lists(model: &Model, compact: bool) -> (Keys, Keys) {
     let help = ("?", "help");
     match model.screen() {
+        Screen::Settings if compact => (
+            vec![("←→", "change"), ("↑↓", "item")],
+            vec![("Esc", "back"), help],
+        ),
+        Screen::Settings => (
+            vec![
+                ("↑↓", "item"),
+                ("←→", "change"),
+                ("Tab", "next group"),
+                ("Space", "output"),
+            ],
+            vec![("Esc", "back"), help],
+        ),
         Screen::Presets => match &model.presets_state().mode {
             PresetMode::Rename(_) => (vec![("⏎", "save")], vec![("Esc", "cancel")]),
             PresetMode::Edit(_) => (

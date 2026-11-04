@@ -192,6 +192,13 @@ fn protection_screen() -> Model {
     model
 }
 
+fn settings_screen(compact: bool) -> Model {
+    let mut model = named(model_with(example_dump(), PORT));
+    model.set_compact(compact);
+    model.on_key(Key::Char(','));
+    model
+}
+
 /// Output OFF, measured values zero, same setpoints (DESIGN.md §0.2).
 fn off_dump() -> Dump {
     let mut dump = example_dump();
@@ -290,6 +297,21 @@ fn ui_02_protection_compact() {
 #[test]
 fn ui_02_protection_120x40() {
     check("protection-120x40", &protection_screen(), 120, 40);
+}
+
+#[test]
+fn ui_02_settings_standard() {
+    check("settings-standard", &settings_screen(false), 80, 24);
+}
+
+#[test]
+fn ui_02_settings_compact() {
+    check("settings-compact", &settings_screen(true), 44, 16);
+}
+
+#[test]
+fn ui_02_settings_120x40() {
+    check("settings-120x40", &settings_screen(false), 120, 40);
 }
 
 #[test]
