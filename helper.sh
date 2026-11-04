@@ -12,6 +12,8 @@ Commands:
   build   Build every crate in the workspace
   test    Run every test in the workspace
   lint    Check formatting, run clippy and audit dependencies
+  deb     Build the .deb package into target/debian/
+  dist-plan  Show what a release would build
 USAGE
 }
 
@@ -38,6 +40,14 @@ case "$command_name" in
         cargo fmt --all --check
         cargo clippy --workspace --all-targets --locked -- -D warnings
         cargo deny --locked check
+        ;;
+    deb)
+        require cargo-deb "install with: cargo install cargo-deb --locked"
+        cargo deb --locked
+        ;;
+    dist-plan)
+        require dist "install with: cargo install cargo-dist --locked"
+        dist plan
         ;;
     *)
         usage

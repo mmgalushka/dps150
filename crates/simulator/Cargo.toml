@@ -6,6 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+# The simulator is a development tool and is never released (DEVOPS.md §1).
+[package.metadata.dist]
+dist = false
+
 [dependencies]
 protocol.workspace = true
 serialport = "4.10.1"

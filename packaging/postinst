@@ -1,0 +1,16 @@
+#!/bin/sh
+# Printed after `apt install ./dps150_*.deb` (DEVOPS.md §8).
+set -e
+if [ "$1" = "configure" ]; then
+    cat <<'NOTE'
+
+dps150: serial port access
+  The FNIRSI DPS-150 appears as /dev/ttyACM<n>. Add your user to the dialout
+  group, then log in again:
+      sudo usermod -aG dialout "$USER"
+  Or install a udev rule for USB ID 2E3C:5740:
+      SUBSYSTEM=="tty", ATTRS{idVendor}=="2e3c", ATTRS{idProduct}=="5740", MODE="0660", GROUP="dialout"
+
+NOTE
+fi
+exit 0

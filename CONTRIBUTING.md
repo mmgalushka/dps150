@@ -9,6 +9,8 @@
 | `./helper.sh build` | Build every crate in the workspace |
 | `./helper.sh test` | Run every test in the workspace |
 | `./helper.sh lint` | Check formatting, run clippy and audit dependencies (needs `cargo-deny`) |
+| `./helper.sh deb` | Build the `.deb` package into `target/debian/` (needs `cargo-deb`, Linux) |
+| `./helper.sh dist-plan` | Show what a release would build (needs `cargo-dist`) |
 
 ## Git ignore policy: ignore everything except...
 
@@ -63,3 +65,5 @@ Rules to remember:
 | `crates/*/Cargo.toml`, `crates/*/src/*.rs`, `crates/*/tests/*.rs`, `crates/*/examples/*.rs` | Workspace crates, their integration tests and examples |
 | `helper.sh` | Development entry point |
 | `.github/workflows/*.yml` | CI workflows |
+| `packaging/postinst` | Maintainer script of the `.deb` (prints the serial-port note) |
+| `dist-workspace.toml` | cargo-dist release configuration |

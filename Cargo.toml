@@ -23,7 +23,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage = "https://github.com/mmgalushka/dps150"
 publish = false
+
+[package.metadata.dist]
+dist = true
 
 [dependencies]
 app.workspace = true
@@ -37,3 +41,15 @@ signal-hook = "0.4.6"
 serialport = "4.10.1"
 device.workspace = true
 vt100 = "0.18.1"
+
+[package.metadata.deb]
+maintainer = "Mykola Galushka <mm.galushka@gmail.com>"
+section = "electronics"
+priority = "optional"
+depends = "$auto"
+extended-description = "Terminal interface for the FNIRSI DPS-150 bench power supply."
+maintainer-scripts = "packaging/"
+assets = [
+    ["target/release/dps150", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/dps150/README", "644"],
+]

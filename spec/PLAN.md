@@ -145,6 +145,7 @@ Built in two parts.
 - User steps: create `mmgalushka/homebrew-tap` and add the tap token as a repository secret.
 - Dry run on a pre-release tag, install on a clean Mac and a clean Debian or Ubuntu. Run DESIGN.md §12 by hand, including on Linux with the real unit, which is untested so far.
 - *Exit:* v1.0.0 tagged.
+- **Status (2026-11-04, branch `m8/release`):** built: `dist-workspace.toml`, generated `release.yml`, `attach-debs.yml`, `packaging/postinst`, `helper.sh deb|dist-plan`, README install and usage, CONTRIBUTING commands; `dist plan` lists the four targets and no simulator; `cargo deb` builds on arm64 Linux. **Not done, needs the user:** create `mmgalushka/homebrew-tap`, add `HOMEBREW_TAP_TOKEN`, bump the version from 0.0.0 to 1.0.0, dry run on a pre-release tag, clean-machine installs, DESIGN.md §12 by hand.
 
 ## 4. Dependencies
 
