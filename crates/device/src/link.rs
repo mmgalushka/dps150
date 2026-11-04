@@ -280,6 +280,8 @@ impl Link {
             Write::Otp(_) => dump.otp_range.get(),
             Write::Lvp(_) => dump.lvp_range.get(),
             Write::Output(_) => u32::MAX,
+            // The register keeps four bits (PROTOCOL.md §3).
+            Write::Brightness(_) | Write::Volume(_) => 15_000,
         };
         if write.thousandths() > limit {
             return refuse(self, Refusal::OutOfRange);
@@ -616,5 +618,7 @@ fn device_value(dump: &Dump, written: Write) -> Write {
         Write::Otp(_) => Write::Otp(dump.otp),
         Write::Lvp(_) => Write::Lvp(dump.lvp),
         Write::Output(_) => Write::Output(dump.output_on),
+        Write::Brightness(_) => Write::Brightness(dump.brightness),
+        Write::Volume(_) => Write::Volume(dump.volume),
     }
 }

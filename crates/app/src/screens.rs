@@ -17,6 +17,7 @@ pub enum Screen {
     Main,
     Presets,
     Protection,
+    Settings,
 }
 
 /// The slot being edited with `e` (§8.1 edit mode).
@@ -372,6 +373,7 @@ impl Model {
         match self.screen {
             Screen::Presets => self.presets_key(key),
             Screen::Protection => self.protection_key(key),
+            Screen::Settings => self.settings_key(key),
             Screen::Main => Effect::None,
         }
     }
@@ -382,7 +384,7 @@ impl Model {
         match screen {
             Screen::Presets => self.presets = PresetsState::default(),
             Screen::Protection => self.protection = ProtectionState::default(),
-            Screen::Main => {}
+            Screen::Settings | Screen::Main => {}
         }
     }
 

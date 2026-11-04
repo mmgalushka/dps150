@@ -136,7 +136,7 @@ Built in two parts.
 
 **M7a. Help overlay.** `?` on every screen: the Standard and Large two-column overlay, the Compact one-column paged overlay, the text per screen (agreed 2026-11-03, DESIGN.md §11.7), its keys. Requirement: UI-08 (the key bar of the overlay), UI-16. Goldens: `help-main-standard`. *Status:* built 2026-11-03 on branch `m7/settings-help`.
 
-**M7b. Settings.** The Settings screen (`,`), config writing, the device brightness and volume writes, colour modes applied at run time. Requirements: UI-02, UI-04, UI-05, UI-09. Goldens: `settings-compact`, `settings-standard`, `settings-120x40`.
+**M7b. Settings.** The Settings screen (`,`), config writing, the device brightness and volume writes, colour modes applied at run time. Requirements: UI-02, UI-04, UI-05, UI-09. Goldens: `settings-compact`, `settings-standard`, `settings-120x40`. *Status:* built 2026-11-04 on branch `m7b/settings`. Open: slider range is the 5-step placeholder (panel ranges [U]); Theme is shown but not selectable (one theme); saving `config.toml` drops comments and unknown keys.
 
 - *Exit:* every golden passes; the sweep 44×16 … 250×80 is clean.
 

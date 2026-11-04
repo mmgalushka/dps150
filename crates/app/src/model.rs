@@ -141,6 +141,7 @@ pub struct Model {
     pub(crate) outgoing: Vec<Write>,
     /// The help overlay is open, at this page (Compact scrolls by page).
     pub(crate) help: Option<usize>,
+    pub(crate) settings: crate::settings::SettingsState,
 }
 
 impl Model {
@@ -173,6 +174,7 @@ impl Model {
             too_small: false,
             outgoing: Vec::new(),
             help: None,
+            settings: Default::default(),
         }
     }
 
@@ -506,6 +508,10 @@ impl Model {
                 self.open_screen(Screen::Protection);
                 Effect::None
             }
+            Key::Char(',') => {
+                self.open_screen(Screen::Settings);
+                Effect::None
+            }
             Key::Char('m') => {
                 self.start_chord();
                 Effect::None
@@ -833,11 +839,13 @@ fn describe(write: Write) -> String {
         Write::Opp(_) => format!("{} W", limits::one_decimal(milli)),
         Write::Otp(_) => format!("{} °C", limits::one_decimal(milli)),
         Write::Output(on) => format!("output {}", if on { "ON" } else { "OFF" }),
+        Write::Brightness(level) => format!("brightness {level}"),
+        Write::Volume(level) => format!("volume {level}"),
     }
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use device::Cause;
     use protocol::value::{MilliCelsius, Milliwatts};
@@ -896,7 +904,7 @@ mod tests {
         }))
     }
 
-    fn model() -> Model {
+    pub(crate) fn model() -> Model {
         let mut model = Model::new("/dev/x", true);
         model.apply(snapshot(dump()));
         model

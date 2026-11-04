@@ -1,6 +1,5 @@
 //! The writes the app may send (PROTOCOL.md §4): setpoints, preset slots,
-//! protection limits and the output switch. There is deliberately no variant
-//! for brightness or volume; those arrive with their own milestone (PLAN.md §3).
+//! protection limits, the output switch, and the device's brightness and volume.
 //! Values are the integer types of [`crate::value`], so a negative or
 //! non-finite number cannot be built (LIM-01, PRT-04).
 
@@ -21,6 +20,10 @@ pub enum Write {
     Lvp(Millivolts),
     /// The output switch, register `DB`: `01` on, `00` off [V 2026-11-02].
     Output(bool),
+    /// Register `D6`, one byte; the device keeps the low 4 bits [V 2026-11-02].
+    Brightness(u8),
+    /// Register `D7`, one byte, as `D6`.
+    Volume(u8),
 }
 
 impl Write {
@@ -37,6 +40,8 @@ impl Write {
             Self::Otp(_) => Register::Otp,
             Self::Lvp(_) => Register::Lvp,
             Self::Output(_) => Register::OutputState,
+            Self::Brightness(_) => Register::Brightness,
+            Self::Volume(_) => Register::Volume,
         }
     }
 
@@ -51,18 +56,24 @@ impl Write {
             Self::Otp(t) => t.get(),
             // 1.000 for on, so an on and an off differ at any resolution.
             Self::Output(on) => u32::from(on) * 1000,
+            Self::Brightness(level) | Self::Volume(level) => u32::from(level) * 1000,
         }
     }
 
     /// The SET frame: `F1 B1 <type> 04 <f32 LE> <cksum>`.
     pub fn to_frame(self) -> Frame {
-        if let Self::Output(on) = self {
+        let byte = match self {
             // One data byte: `F1 B1 DB 01 01 DD` on, `... 00 DC` off.
+            Self::Output(on) => Some(u8::from(on)),
+            Self::Brightness(level) | Self::Volume(level) => Some(level),
+            _ => None,
+        };
+        if let Some(byte) = byte {
             return Frame::new(
                 Dir::HostToDevice,
                 command::SET,
                 self.register().id(),
-                [u8::from(on)],
+                [byte],
             )
             .expect("one byte fits");
         }
@@ -73,7 +84,9 @@ impl Write {
             Self::SetCurrent(a) | Self::PresetCurrent(_, a) | Self::Ocp(a) => a.to_wire(),
             Self::Opp(w) => w.to_wire(),
             Self::Otp(t) => t.to_wire(),
-            Self::Output(_) => unreachable!("handled above"),
+            Self::Output(_) | Self::Brightness(_) | Self::Volume(_) => {
+                unreachable!("handled above")
+            }
         };
         Frame::new(
             Dir::HostToDevice,
@@ -92,6 +105,7 @@ impl Write {
             Self::SetCurrent(_) | Self::PresetCurrent(..) | Self::Ocp(_) => 1,
             Self::Opp(_) | Self::Otp(_) => 100,
             Self::Output(_) => 1,
+            Self::Brightness(_) | Self::Volume(_) => 1000,
         }
     }
 
@@ -114,6 +128,8 @@ impl Write {
             Self::Otp(_) => Self::Otp(MilliCelsius::new(thousandths)),
             Self::Lvp(_) => Self::Lvp(Millivolts::new(thousandths)),
             Self::Output(_) => Self::Output(thousandths != 0),
+            Self::Brightness(_) => Self::Brightness((thousandths / 1000).min(255) as u8),
+            Self::Volume(_) => Self::Volume((thousandths / 1000).min(255) as u8),
         }
     }
 }
@@ -144,6 +160,21 @@ mod tests {
             [0xF1, 0xB1, 0xDB, 0x01, 0x00, 0xDC]
         );
         assert_eq!(Write::Output(true).register(), Register::OutputState);
+    }
+
+    #[test]
+    fn set_01_brightness_and_volume_are_one_byte_sets() {
+        // Checksum: D6 + 01 + 03 = DA; D7 + 01 + 01 = D9.
+        assert_eq!(
+            Write::Brightness(3).to_frame().encode(),
+            [0xF1, 0xB1, 0xD6, 0x01, 0x03, 0xDA]
+        );
+        assert_eq!(
+            Write::Volume(1).to_frame().encode(),
+            [0xF1, 0xB1, 0xD7, 0x01, 0x01, 0xD9]
+        );
+        assert!(Write::Brightness(3).differs_from(Write::Brightness(4)));
+        assert!(!Write::Volume(2).differs_from(Write::Volume(2)));
     }
 
     #[test]

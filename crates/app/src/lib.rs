@@ -14,10 +14,13 @@ mod output;
 mod port;
 pub mod protection;
 mod screens;
+mod settings;
 mod shutdown;
 
 pub use cli::{Cli, parse_args};
-pub use config::{ColorSetting, Config, Loaded, OnExit, OutputOn, config_path, load_config};
+pub use config::{
+    ColorSetting, Config, Loaded, OnExit, OutputOn, config_path, load_config, save_config,
+};
 pub use help::{COMPACT_ROWS_MAIN, COMPACT_ROWS_SECONDARY, Help, compact_pages, help_for};
 pub use model::{Effect, Entry, Focus, Key, Line, LinkStatus, Model, Tone};
 pub use names::{LoadedNames, MAX_NAME, Names, load_names, names_path, save_names};
@@ -27,6 +30,7 @@ pub use screens::{
     Blocked, CLEARED, PresetEdit, PresetMode, PresetsState, Prompt, ProtectionEdit, ProtectionMode,
     ProtectionState, Screen, Typed,
 };
+pub use settings::{GROUPS, Row, SLIDER_MAX};
 pub use shutdown::{Action, Facts, Outcome, Shutdown};
 
 pub mod locale {

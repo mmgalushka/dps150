@@ -9,6 +9,7 @@ pub mod layout;
 mod main_panel;
 mod paint;
 mod secondary;
+mod settings;
 pub mod theme;
 mod too_small;
 
