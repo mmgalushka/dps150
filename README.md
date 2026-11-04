@@ -12,3 +12,21 @@ Terminal interface for FNIRSI DPS-150
 - [spec/PLAN.md](spec/PLAN.md): implementation plan: stages, milestones, hardware session, requirement coverage
 - [DEVOPS.md](DEVOPS.md): toolchain, testing, CI, release and installation
 - [CONTRIBUTING.md](CONTRIBUTING.md): repository conventions (git ignore allowlist)
+
+## Install
+```
+# macOS and Linux with Homebrew
+brew install mmgalushka/tap/dps150
+
+# Debian and Ubuntu: download the .deb from the latest release
+sudo apt install ./dps150_<version>_<arch>.deb
+```
+On Linux your user needs access to the serial port: `sudo usermod -aG dialout $USER`, then log in again (the `.deb` prints this note). macOS needs no setup.
+
+## Usage
+```
+dps150 [--port <path>] [--help] [--version]
+```
+Connect the DPS-150 with its USB cable and run `dps150`. The port is found by USB ID (`2E3C:5740`); `--port /dev/cu.usbmodemXXXX` (macOS) or `--port /dev/ttyACM0` (Linux) overrides it.
+
+Main keys: `←→` move the digit cursor, `↑↓` change the digit, `⏎` or `v` / `i` type a value, `Tab` switch V/I, `Space` output on/off, `Ctrl-X` output off, `m 1-6` recall a preset, `p` presets, `o` protection, `,` settings, `?` help, `q` quit. Press `?` on any screen for that screen's keys. Settings are saved in `~/.config/dps150/config.toml`, preset names in `presets.toml`.

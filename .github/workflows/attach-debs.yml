@@ -1,0 +1,40 @@
+# cargo-dist builds no .deb files, so they are built here on the same tag and
+# attached to the Release once release.yml has created it (DEVOPS.md §5).
+# (dist 0.34 writes a broken `uses:` line for post-announce-jobs, so this is
+# its own workflow.)
+name: Attach .deb packages
+
+on:
+  push:
+    tags: ["**[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: write
+
+jobs:
+  deb:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+          - runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
+      - run: cargo install cargo-deb --locked --version 3.8.0
+      - run: cargo deb --locked
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Wait up to 30 minutes for release.yml to publish the Release.
+          for _ in $(seq 1 60); do
+            gh release view "$TAG" >/dev/null 2>&1 && break
+            sleep 30
+          done
+          gh release upload "$TAG" target/debian/*.deb --clobber
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: target/debian/*.deb
