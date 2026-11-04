@@ -1427,3 +1427,71 @@ fn saf_11_on_the_too_small_screen_only_ctrl_c_quits_and_it_closes_the_session() 
     assert_eq!(tui.wait_exit(), 0);
     assert_eq!(sim.state()["locked"], "false");
 }
+
+// ---- help ----------------------------------------------------------------------------------
+
+#[test]
+fn ui_08_question_mark_opens_the_help_and_esc_closes_it_on_a_real_terminal() {
+    let sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    tui.send(b"?");
+    for text in [
+        "Help · main panel",
+        "? or Esc closes",
+        "Glossary",
+        "Esc  close",
+    ] {
+        tui.wait_for(text);
+    }
+    assert!(!tui.contents().contains("MEASURED"), "it replaces the body");
+    tui.send(b"\x1b");
+    tui.wait_for("MEASURED");
+    tui.gone("Help · main panel");
+    tui.send(b"p?");
+    tui.wait_for("Help · presets");
+    tui.wait_for("PRESETS");
+    tui.send(b"?");
+    tui.gone("Help · presets");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn ui_08_the_compact_help_turns_pages_with_the_arrows() {
+    let sim = Sim::start();
+    let mut tui = Tui::start_sized(&sim, &[], 16, 44);
+    tui.wait_for("connected");
+    tui.send(b"?");
+    tui.wait_for("Help · main panel 1/2");
+    tui.send(DOWN);
+    tui.wait_for("Help · main panel 2/2");
+    tui.wait_for("Glossary");
+    tui.send(UP);
+    tui.wait_for("Help · main panel 1/2");
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}
+
+#[test]
+fn saf_01_under_the_help_space_switches_an_output_that_is_on_off_and_never_on() {
+    let mut sim = Sim::start();
+    sim.command("panel on");
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("OUTPUT  ON");
+    tui.send(b"?");
+    tui.wait_for("Help · main panel");
+    tui.send(b" ");
+    sim.wait_state("output", "off");
+    tui.send(b" ");
+    thread::sleep(Duration::from_millis(400));
+    assert_eq!(sim.state()["output"], "off", "no ON from under the overlay");
+    tui.send(b"\x1b");
+    tui.wait_for("OUTPUT  OFF");
+    assert!(
+        !tui.contents().contains("Turn output ON"),
+        "no hidden question"
+    );
+    tui.send(&[0x03]);
+    assert_eq!(tui.wait_exit(), 0);
+}

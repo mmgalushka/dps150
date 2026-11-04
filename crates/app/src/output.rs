@@ -92,6 +92,7 @@ impl Model {
 
     /// Drops every prompt, entry and edit: nothing is applied.
     pub(crate) fn cancel_pending(&mut self) {
+        self.help = None;
         self.prompt = None;
         self.chord = false;
         self.entry = None;

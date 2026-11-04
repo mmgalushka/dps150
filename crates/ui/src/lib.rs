@@ -4,6 +4,7 @@
 
 pub mod font;
 pub mod format;
+mod help;
 pub mod layout;
 mod main_panel;
 mod paint;
@@ -30,6 +31,7 @@ pub fn render(model: &Model, buf: &mut Buffer, theme: Theme) {
     painter.fill(Rect::new(area.x, area.y, area.width, area.height), S::Page);
     match Tier::select(area.width, area.height) {
         Tier::TooSmall => too_small::draw(&mut painter, model, area),
+        tier if model.help_page().is_some() => help::draw(&mut painter, model, area, tier),
         tier if model.screen() != app::Screen::Main => {
             secondary::draw(&mut painter, model, area, tier);
         }

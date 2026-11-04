@@ -139,6 +139,8 @@ pub struct Model {
     pub(crate) too_small: bool,
     /// Writes no key caused (the queued OFF after a reconnect).
     pub(crate) outgoing: Vec<Write>,
+    /// The help overlay is open, at this page (Compact scrolls by page).
+    pub(crate) help: Option<usize>,
 }
 
 impl Model {
@@ -170,6 +172,7 @@ impl Model {
             off_queued: false,
             too_small: false,
             outgoing: Vec::new(),
+            help: None,
         }
     }
 
@@ -470,6 +473,13 @@ impl Model {
                 _ => Effect::None,
             };
         }
+        if self.help.is_some() {
+            return self.help_key(key);
+        }
+        if key == Key::Char('?') && self.can_open_help() {
+            self.help = Some(0);
+            return Effect::None;
+        }
         // `Space` and `Ctrl-X` outside the contexts that only cancel (typed
         // entry, prompts, the chord): `Ctrl-X` is OFF in every mode, `Space`
         // the toggle (SAF-01, SAF-02). In the rename field `Space` is a
@@ -727,6 +737,40 @@ impl Model {
 }
 
 impl Model {
+    /// `?` opens the help on every screen, except where it is a typed
+    /// character or a question is waiting (§5.13).
+    fn can_open_help(&self) -> bool {
+        !(self.prompt.is_some()
+            || self.chord
+            || self.entry.is_some()
+            || self.renaming()
+            || self.protection_typing())
+    }
+
+    /// Keys while the overlay is open: `?`, `Esc` and `q` close it, `↑` `↓`
+    /// turn the pages of the Compact overlay; `Space` and `Ctrl-X` still
+    /// switch the output OFF, and `Space` never turns it ON because the
+    /// question could not be seen under the overlay (§5.13, SAF-01).
+    fn help_key(&mut self, key: Key) -> Effect {
+        match key {
+            Key::Char('?') | Key::Esc | Key::Char('q') => self.help = None,
+            Key::Up => self.help = self.help.map(|page| page.saturating_sub(1)),
+            Key::Down => {
+                let last = crate::help::compact_pages(self.screen) - 1;
+                self.help = self.help.map(|page| (page + 1).min(last));
+            }
+            Key::Char(' ') | Key::CtrlX => return self.off_only(),
+            Key::CtrlC => return Effect::Quit,
+            _ => {}
+        }
+        Effect::None
+    }
+
+    /// The overlay's page when it is open (0-based).
+    pub fn help_page(&self) -> Option<usize> {
+        self.help
+    }
+
     fn renaming(&self) -> bool {
         self.screen == Screen::Presets
             && matches!(self.presets.mode, crate::screens::PresetMode::Rename(_))
