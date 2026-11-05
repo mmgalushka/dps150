@@ -22,7 +22,7 @@ Status: baseline, 2026-10-30. The index that connects the specification to tests
 | PRT-05 | On start the app changes no device setting; it connects, reads the full state and shows it; writes happen only on explicit user action | SAFETY §4.10, MAIN §3 | D | L1 L2 |
 | PRT-06 | Poll `FF` at the Refresh rate (default 10 Hz); skip a tick while the previous reply is outstanding; pushed frames update the model whenever they arrive | APP §2 | — | L1 L2 |
 | CLI-01 | Flags are `--port <path>`, `--help`, `--version` and nothing else in v1 | MAIN §6 | D | L1 |
-| CLI-02 | Port resolution: `--port` wins; else with `auto_detect` match USB `2E3C:5740`; exactly one match is used, zero or several print the candidates to stderr and exit 1; with `auto_detect = false` the port comes from `--port` or config `port`, else exit 1 | MAIN §6 | D | L1 M |
+| CLI-02 | Port resolution: `--port` wins; else with `auto_detect` match USB `2E3C:5740`; exactly one match is used (on macOS a `/dev/tty.X` is dropped when its `/dev/cu.X` twin is listed), zero or several print the candidates to stderr and exit 1; with `auto_detect = false` the port comes from `--port` or config `port`, else exit 1 | MAIN §6 | D | L1 M |
 
 ## 3. Limits and validation (LIM)
 

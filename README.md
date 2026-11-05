@@ -13,6 +13,9 @@ Terminal interface for FNIRSI DPS-150
 - [DEVOPS.md](DEVOPS.md): toolchain, testing, CI, release and installation
 - [CONTRIBUTING.md](CONTRIBUTING.md): repository conventions (git ignore allowlist)
 
+## Develop
+Cloned the repository? Run `./helper.sh init`, then `./helper.sh run`. Full steps: [CONTRIBUTING.md](CONTRIBUTING.md#getting-started).
+
 ## Install
 ```
 # macOS and Linux with Homebrew

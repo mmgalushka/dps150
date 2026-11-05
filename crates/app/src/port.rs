@@ -60,6 +60,10 @@ pub fn resolve_port(
         };
     }
     let mut matches: Vec<&PortInfo> = ports.iter().filter(|p| p.usb == Some(USB_ID)).collect();
+    // macOS lists one device twice, as `/dev/cu.X` and `/dev/tty.X`; use `cu.X`.
+    let twin = |path: &str| path.replacen("/dev/tty.", "/dev/cu.", 1);
+    let all: Vec<String> = matches.iter().map(|p| p.path.clone()).collect();
+    matches.retain(|p| !p.path.starts_with("/dev/tty.") || !all.contains(&twin(&p.path)));
     matches.sort_by(|a, b| a.path.cmp(&b.path));
     match matches.as_slice() {
         [] => Err(ResolveError::NoDevice),
@@ -115,6 +119,36 @@ mod tests {
             ResolveError::Several(vec!["/dev/cu.usbmodem1".into(), "/dev/cu.usbmodem2".into()])
         );
         assert!(error.to_string().contains("/dev/cu.usbmodem2"));
+    }
+
+    #[test]
+    fn cli_02_a_mac_device_listed_as_cu_and_tty_is_one_device() {
+        let config = Config::default();
+        let cu = port("/dev/cu.usbmodem1", Some(USB_ID));
+        let tty = port("/dev/tty.usbmodem1", Some(USB_ID));
+        assert_eq!(
+            resolve_port(None, &config, &[tty.clone(), cu]),
+            Ok("/dev/cu.usbmodem1".into())
+        );
+        // A lone `tty.X` has no twin to prefer, so it is kept.
+        assert_eq!(
+            resolve_port(None, &config, &[tty]),
+            Ok("/dev/tty.usbmodem1".into())
+        );
+        // Two real units are still ambiguous.
+        let ports = [
+            port("/dev/cu.usbmodem1", Some(USB_ID)),
+            port("/dev/tty.usbmodem1", Some(USB_ID)),
+            port("/dev/cu.usbmodem2", Some(USB_ID)),
+            port("/dev/tty.usbmodem2", Some(USB_ID)),
+        ];
+        assert_eq!(
+            resolve_port(None, &config, &ports),
+            Err(ResolveError::Several(vec![
+                "/dev/cu.usbmodem1".into(),
+                "/dev/cu.usbmodem2".into()
+            ]))
+        );
     }
 
     #[test]
