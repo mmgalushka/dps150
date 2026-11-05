@@ -64,20 +64,20 @@ case "$command_name" in
         fi
         ;;
     run)
-        require cargo "run ./helper.sh init for setup help"
+        command -v cargo >/dev/null 2>&1 || missing_cargo
         shift
         cargo run --locked -- "$@"
         ;;
     build)
-        require cargo "install with rustup"
+        command -v cargo >/dev/null 2>&1 || missing_cargo
         cargo build --workspace --locked
         ;;
     test)
-        require cargo "install with rustup"
+        command -v cargo >/dev/null 2>&1 || missing_cargo
         cargo test --workspace --locked
         ;;
     lint)
-        require cargo "install with rustup"
+        command -v cargo >/dev/null 2>&1 || missing_cargo
         require cargo-deny "install with: cargo install cargo-deny --locked"
         cargo fmt --all --check
         cargo clippy --workspace --all-targets --locked -- -D warnings

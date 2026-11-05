@@ -12,7 +12,10 @@ use device::{Command, Device, LinkConfig, Message};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::cursor::{Hide, Show};
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
+    KeyModifiers,
+};
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -245,6 +248,7 @@ fn event_loop(
                 }
                 // A resize re-evaluates the tier at once and keeps the state.
                 Event::Resize(..) => dirty = true,
+                // The wheel and clicks do nothing (the mouse is captured).
                 _ => {}
             }
         }
@@ -312,8 +316,8 @@ fn map_key(key: KeyEvent) -> Option<Key> {
     })
 }
 
-/// Raw mode, the alternate screen and a hidden cursor, all undone on drop,
-/// on a panic and on a signal (UI-11).
+/// Raw mode, the alternate screen, mouse capture and a hidden cursor, all
+/// undone on drop, on a panic and on a signal (UI-11).
 struct TerminalGuard(Terminal<CrosstermBackend<Stdout>>);
 
 impl TerminalGuard {
@@ -328,7 +332,10 @@ impl TerminalGuard {
         }));
         enable_raw_mode()?;
         let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, Hide)?;
+        // Capturing the mouse stops the terminal from turning the wheel into
+        // ↑/↓ keys (which would change the set values) or scrolling its
+        // history; the events themselves are ignored by the event loop.
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture, Hide)?;
         Ok(Self(Terminal::new(CrosstermBackend::new(stdout))?))
     }
 }
@@ -341,5 +348,10 @@ impl Drop for TerminalGuard {
 
 fn restore() {
     let _ = disable_raw_mode();
-    let _ = execute!(io::stdout(), Show, LeaveAlternateScreen);
+    let _ = execute!(
+        io::stdout(),
+        Show,
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    );
 }

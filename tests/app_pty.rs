@@ -418,6 +418,22 @@ fn ui_11_the_alternate_screen_and_cursor_are_entered_and_restored_on_quit() {
 }
 
 #[test]
+fn ui_11_the_mouse_is_captured_so_the_wheel_cannot_scroll_or_press_arrow_keys() {
+    const MOUSE_ON: &str = "\x1b[?1000h";
+    const MOUSE_OFF: &str = "\x1b[?1000l";
+    let sim = Sim::start();
+    let mut tui = Tui::start(&sim, &[]);
+    tui.wait_for("connected");
+    assert!(tui.raw_text().contains(MOUSE_ON), "mouse captured");
+    // Wheel up and down, and a click, as the terminal reports them (SGR).
+    tui.send(b"\x1b[<64;10;5M\x1b[<65;10;5M\x1b[<0;10;5M\x1b[<0;10;5m");
+    tui.wait_for("connected");
+    tui.send(b"q");
+    assert_eq!(tui.wait_exit(), 0);
+    assert!(tui.raw_text().contains(MOUSE_OFF), "mouse released on exit");
+}
+
+#[test]
 fn ui_11_ctrl_c_quits_and_restores_the_terminal() {
     let sim = Sim::start();
     let mut tui = Tui::start(&sim, &[]);

@@ -33,3 +33,6 @@ dps150 [--port <path>] [--help] [--version]
 Connect the DPS-150 with its USB cable and run `dps150`. The port is found by USB ID (`2E3C:5740`); `--port /dev/cu.usbmodemXXXX` (macOS) or `--port /dev/ttyACM0` (Linux) overrides it.
 
 Main keys: `←→` move the digit cursor, `↑↓` change the digit, `⏎` or `v` / `i` type a value, `Tab` switch V/I, `Space` output on/off, `Ctrl-X` output off, `m 1-6` recall a preset, `p` presets, `o` protection, `,` settings, `?` help, `q` quit. Press `?` on any screen for that screen's keys. Settings are saved in `~/.config/dps150/config.toml`, preset names in `presets.toml`.
+
+## Troubleshooting
+- **Parts of the dps150 screen show up when I scroll the terminal after quitting.** dps150 draws on the terminal's alternate screen, which normally leaves no trace. iTerm2 can save that screen into scrollback: turn off Settings → Profiles → Terminal → "Save lines to scrollback in alternate screen mode".
