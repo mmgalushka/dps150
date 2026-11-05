@@ -12,7 +12,7 @@ use protocol::{Frame, Register, command};
 #[test]
 fn prt_01_the_connect_frame_is_the_first_write_and_reads_wait_one_gap() {
     let mut rig = Rig::new();
-    rig.run(Duration::from_millis(300));
+    rig.run(Duration::from_millis(500));
     let (first_at, first) = &rig.written[0];
     assert_eq!(first.encode(), Frame::connect().encode());
     assert_eq!(*first_at, MS, "connect goes out at once");
@@ -24,6 +24,13 @@ fn prt_01_the_connect_frame_is_the_first_write_and_reads_wait_one_gap() {
     );
     let ids: Vec<u8> = rig.written[1..5].iter().map(|(_, f)| f.id()).collect();
     assert_eq!(ids, [0xDE, 0xDF, 0xE0, 0xFF]);
+    // The unit ignores GETs that arrive back to back.
+    for pair in rig.written[1..5].windows(2) {
+        assert!(
+            pair[1].0 - pair[0].0 >= Duration::from_millis(100),
+            "one gap between GETs"
+        );
+    }
 }
 
 #[test]

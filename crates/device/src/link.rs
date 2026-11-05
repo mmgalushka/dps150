@@ -13,6 +13,14 @@ use crate::constants::{
     SET_GAP,
 };
 
+/// What the handshake asks for, in order; the dump ends it.
+const HANDSHAKE_GETS: [Register; 4] = [
+    Register::Model,
+    Register::HardwareVersion,
+    Register::FirmwareVersion,
+    Register::Dump,
+];
+
 /// Where the link is (APP.md §5). `Resolving` happens before the core exists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
@@ -135,7 +143,7 @@ pub struct Link {
     // Handshake.
     opened_at: Duration,
     connect_sent: bool,
-    gets_sent: bool,
+    gets_sent: usize,
     resent: bool,
 
     // Polling.
@@ -175,7 +183,7 @@ impl Link {
             loss_announced: false,
             opened_at: Duration::ZERO,
             connect_sent: false,
-            gets_sent: false,
+            gets_sent: 0,
             resent: false,
             quiet_until: Duration::ZERO,
             next_tick: Duration::ZERO,
@@ -365,7 +373,7 @@ impl Link {
         self.reset_reader();
         self.opened_at = now;
         self.connect_sent = false;
-        self.gets_sent = false;
+        self.gets_sent = 0;
         self.resent = false;
         self.outstanding = false;
         self.missed = 0;
@@ -451,7 +459,7 @@ impl Link {
         if !self.resent && now.saturating_sub(self.opened_at) >= HANDSHAKE_RESEND {
             self.resent = true;
             self.connect_sent = false;
-            self.gets_sent = false;
+            self.gets_sent = 0;
         }
         let mut out = Vec::new();
         if !self.connect_sent {
@@ -459,16 +467,12 @@ impl Link {
             self.connect_sent = true;
             self.quiet_until = now + SET_GAP;
         }
-        if !self.gets_sent && now >= self.quiet_until {
-            for register in [
-                Register::Model,
-                Register::HardwareVersion,
-                Register::FirmwareVersion,
-                Register::Dump,
-            ] {
-                out.extend(Frame::get(register).encode());
-            }
-            self.gets_sent = true;
+        // One GET per gap: the unit ignores GETs that arrive back to back
+        // (verified on hardware, 2026-11-04).
+        if self.gets_sent < HANDSHAKE_GETS.len() && now >= self.quiet_until {
+            out.extend(Frame::get(HANDSHAKE_GETS[self.gets_sent]).encode());
+            self.gets_sent += 1;
+            self.quiet_until = now + SET_GAP;
         }
         out
     }

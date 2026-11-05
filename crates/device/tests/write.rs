@@ -147,7 +147,7 @@ fn edt_03_writes_to_one_register_coalesce_to_the_latest_value() {
 fn edt_03_a_new_write_while_one_waits_for_its_gap_replaces_it() {
     let mut rig = Rig::online();
     rig.link.write(volts(5000)).unwrap();
-    rig.run(Duration::from_millis(5)); // first SET is out, gap running
+    rig.run(Duration::from_millis(110)); // the handshake gap passes, first SET is out, gap running
     rig.link.write(volts(6000)).unwrap();
     rig.link.write(volts(7000)).unwrap();
     rig.run(secs(1));
