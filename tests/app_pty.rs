@@ -353,6 +353,34 @@ impl Tui {
         self.master.write_all(bytes).unwrap();
     }
 
+    /// Resizes the terminal the way a window manager would. The emulator is
+    /// resized first: once the pty has the new size the app may draw at once,
+    /// and a frame written to an emulator of the old size wraps, and only
+    /// the cells that change are ever sent again.
+    fn resize(&mut self, rows: u16, cols: u16) {
+        self.screen
+            .lock()
+            .unwrap()
+            .screen_mut()
+            .set_size(nz(rows), nz(cols));
+        let path = self._slave.name().unwrap();
+        Command::new("stty")
+            .args([
+                "-F",
+                &path,
+                "rows",
+                &rows.to_string(),
+                "cols",
+                &cols.to_string(),
+            ])
+            .status()
+            .unwrap();
+        Command::new("kill")
+            .args(["-WINCH", &self.child.id().to_string()])
+            .status()
+            .unwrap();
+    }
+
     fn wait_exit(&mut self) -> i32 {
         let begin = Instant::now();
         while begin.elapsed() < Duration::from_secs(5) {
@@ -466,20 +494,7 @@ fn ui_12_resize_reevaluates_the_tier_and_keeps_the_state() {
     tui.send(b"\t");
     tui.wait_for("▸ CURRENT");
     // Shrink the terminal below the Fluid floor: the Compact layout appears.
-    let path = tui._slave.name().unwrap();
-    Command::new("stty")
-        .args(["-F", &path, "rows", "16", "cols", "50"])
-        .status()
-        .unwrap();
-    {
-        let mut screen = tui.screen.lock().unwrap();
-        screen.screen_mut().set_size(nz(16), nz(50));
-    }
-    let pid = tui.child.id().to_string();
-    Command::new("kill")
-        .args(["-WINCH", &pid])
-        .status()
-        .unwrap();
+    tui.resize(16, 50);
     tui.wait_for("▸ CURRENT (A)"); // the focus is kept
     tui.send(b"q");
     assert_eq!(tui.wait_exit(), 0);
@@ -1158,35 +1173,10 @@ fn saf_09_a_prompt_is_cancelled_when_the_terminal_becomes_too_small() {
     tui.wait_for("connected");
     tui.send(b" ");
     tui.wait_for("Turn output ON");
-    let path = tui._slave.name().unwrap();
-    Command::new("stty")
-        .args(["-F", &path, "rows", "15", "cols", "43"])
-        .status()
-        .unwrap();
-    tui.screen
-        .lock()
-        .unwrap()
-        .screen_mut()
-        .set_size(nz(15), nz(43));
-    Command::new("kill")
-        .args(["-WINCH", &tui.child.id().to_string()])
-        .status()
-        .unwrap();
+    tui.resize(15, 43);
     tui.wait_for("Terminal too small");
     // Back to a usable size: the question did not come back.
-    Command::new("stty")
-        .args(["-F", &path, "rows", "24", "cols", "80"])
-        .status()
-        .unwrap();
-    tui.screen
-        .lock()
-        .unwrap()
-        .screen_mut()
-        .set_size(nz(24), nz(80));
-    Command::new("kill")
-        .args(["-WINCH", &tui.child.id().to_string()])
-        .status()
-        .unwrap();
+    tui.resize(24, 80);
     tui.wait_for("MEASURED");
     assert!(!tui.contents().contains("Turn output ON"));
     tui.send(&[0x03]);

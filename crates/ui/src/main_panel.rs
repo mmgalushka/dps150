@@ -703,7 +703,7 @@ fn fluid_content(p: &mut Painter, view: &View, rect: Rect, which: Focus, font: F
     if focused {
         let index = char_index(which, view.cursors[which_index(which)]);
         let x = margin + font.start_of(&set_text, index) as u16;
-        let glyph = "▔".repeat(font.height());
+        let glyph = font.caret();
         p.text(x, set_y + 1 + h, &glyph, S::Cur);
     }
 }

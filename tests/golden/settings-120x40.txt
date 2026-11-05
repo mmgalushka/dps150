@@ -1,5 +1,5 @@
- FNIRSI  DPS-150 · fw V1.2 · hw V1.0                                         ● connected  /dev/cu.usbmodem13C85FCE40251 
- 4.998 V  0.512 A  2.56 W  CV · ON                                                                             SETTINGS 
+ FNIRSI  DPS-150 · fw V1.2 · hw V1.0                                         ● connected  /dev/cu.usbmodem13C85FCE40251
+ 4.998 V  0.512 A  2.56 W  CV · ON                                                                             SETTINGS
 ╭─ Device ─────────────────────────────── saved on device ─╮╭─ Safety ─────────────────────────────────────────────────╮
 │  ▸ Brightness                            ━━━━━━────  3   ││    Output on   ◂ ask first ▸                             │
 │    Volume                                ━━────────  1   ││    V jump over ◂ 5.0 V ▸                                 │
@@ -37,4 +37,4 @@
 │                                                          ││                                                          │
 │                                                          ││                                                          │
 ╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
- ↑↓  item   ←→  change   Tab  next group   Space  output   Esc  back   ?  help  
+ ↑↓  item   ←→  change   Tab  next group   Space  output   Esc  back   ?  help

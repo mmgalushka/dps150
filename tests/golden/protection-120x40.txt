@@ -1,5 +1,5 @@
- FNIRSI  DPS-150 · fw V1.2 · hw V1.0                                         ● connected  /dev/cu.usbmodem13C85FCE40251 
- 4.998 V  0.512 A  2.56 W  CV · ON                                                                           PROTECTION 
+ FNIRSI  DPS-150 · fw V1.2 · hw V1.0                                         ● connected  /dev/cu.usbmodem13C85FCE40251
+ 4.998 V  0.512 A  2.56 W  CV · ON                                                                           PROTECTION
 ╭─ Protection limits ────────────────────────────────────────────────────────────────────────── trip turns output off ─╮
 │    name    limit   device range live           load                                                                  │
 │    OVP   30.00 V   0 – 30 V     out    5.00 V       ━━━━━━━━━───────────────────────────────────────────────  17%    │
@@ -19,14 +19,14 @@
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
-│  ┏━━━━━┓ ┏━━━━━╸      ╻    ┏━━━━━┓   Device range   0 – 5.10 A                                                       │
-│  ┃     ┃ ┃            ┃    ┃     ┃   Current limit  1.500 A   ✓ OCP stays above it                                   │
-│  ┃     ┃ ┃            ┃    ┃     ┃   Drawn now      0.512 A   margin 4.59 A                                          │
-│  ┃     ┃ ┗━━━━━┓      ┃    ┃     ┃                                                                                   │
-│  ┃     ┃       ┃      ┃    ┃     ┃                                                                                   │
-│  ┃     ┃       ┃      ┃    ┃     ┃                                                                                   │
-│  ┗━━━━━┛ ╺━━━━━┛ .    ╹    ┗━━━━━┛                                                                                   │
-│          ▔▔▔▔▔▔▔                                                                                                     │
+│  ███████ ███████     ██    ███████   Device range   0 – 5.10 A                                                       │
+│  ██   ██ ██          ██    ██   ██   Current limit  1.500 A   ✓ OCP stays above it                                   │
+│  ██   ██ ██          ██    ██   ██   Drawn now      0.512 A   margin 4.59 A                                          │
+│  ██   ██ ███████     ██    ██   ██                                                                                   │
+│  ██   ██      ██     ██    ██   ██                                                                                   │
+│  ██   ██      ██     ██    ██   ██                                                                                   │
+│  ███████ ███████ ▄   ██    ███████                                                                                   │
+│          ▁▁▁▁▁▁▁                                                                                                     │
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
@@ -37,4 +37,4 @@
 │                                                                                                                      │
 │                                                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
- ←→  digit   ↑↓  value   ⏎  apply   0-9  type   Esc  cancel   ?  help  
+ ←→  digit   ↑↓  value   ⏎  apply   0-9  type   Esc  cancel   ?  help

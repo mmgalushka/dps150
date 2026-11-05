@@ -618,7 +618,7 @@ fn ui_03_compact_uses_the_tall_block_and_a_power_bar_when_there_is_room() {
 
 #[test]
 fn ui_06_only_documented_glyphs_appear_and_each_is_one_cell_wide() {
-    let allowed = "╭╮╰╯─│━┏┓┗┛┃┣┫╺╸╻╹▔○●▸◂✓✗!·°→↑↓←⏎…–× ?.-,/:";
+    let allowed = "╭╮╰╯─│━┏┓┗┛┃┣┫╺╸╻╹▔▁█▄○●▸◂✓✗!·°→↑↓←⏎…–× ?.-,/:";
     let model = model_with(example_dump(), PORT);
     for (cols_, rows_) in [(44, 16), (80, 24), (100, 21), (120, 40)] {
         for line in draw(&model, cols_, rows_) {
