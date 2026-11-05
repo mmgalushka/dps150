@@ -1,11 +1,23 @@
 # Contributing
 
+## Getting started
+
+1. Clone the repository and enter it: `git clone https://github.com/mmgalushka/dps150.git && cd dps150`
+2. Install Rust with [rustup](https://rustup.rs). On macOS with Homebrew: `brew install rustup`, then add `export PATH="$(brew --prefix rustup)/bin:$PATH"` to `~/.zshrc` and open a new terminal. On Linux also install `libudev-dev` and `pkg-config`.
+3. Run `./helper.sh init`. It checks the prerequisites, installs the pinned toolchain and builds the workspace.
+4. Connect the DPS-150 with its USB cable and run `./helper.sh run`. Use `./helper.sh run --port /dev/cu.usbmodemXXXX` (macOS) or `--port /dev/ttyACM0` (Linux) if the port is not found on its own. Press `?` for the keys and `q` to quit.
+5. Before a pull request: `./helper.sh test` and `./helper.sh lint`.
+
+Keep the output off with nothing attached to the terminals on a first run. On Linux your user needs the `dialout` group (`sudo usermod -aG dialout $USER`, then log in again). Only one program can hold the serial port, so close other copies of the app first.
+
 ## Development commands
 
 `helper.sh` is the entry point for everyday tasks (DEVOPS.md §4.0).
 
 | Command | Does |
 | --- | --- |
+| `./helper.sh init` | Check the prerequisites and build once (after cloning) |
+| `./helper.sh run [--port <path>]` | Run the app, passing the arguments to `dps150` |
 | `./helper.sh build` | Build every crate in the workspace |
 | `./helper.sh test` | Run every test in the workspace |
 | `./helper.sh lint` | Check formatting, run clippy and audit dependencies (needs `cargo-deny`) |
