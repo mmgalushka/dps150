@@ -198,7 +198,7 @@ Detect once at start, in this order: {#UI-04}
 |---|---|
 | Box (rounded) | `╭ ╮ ╰ ╯ ─ │` |
 | Bar | `━` fill, `─` track |
-| Big digits | `┏ ┓ ┗ ┛ ┃ ━ ┣ ┫ ╺ ╸ ╻ ╹` |
+| Big digits | `┏ ┓ ┗ ┛ ┃ ━ ┣ ┫ ╺ ╸ ╻ ╹` (F3, F5); `█ ▄` (F7) |
 | Digit cursor | `▔` (U+2594) |
 | Lamps | `○` armed, `●` tripped / connected |
 | Markers | `▸` selected row, `◂ ▸` option arrows, `✓` valid, `✗` invalid / rule violated, `!` warning |
@@ -240,7 +240,12 @@ F5 glyphs are 5 cells wide and 5 rows tall, F7 glyphs 7 wide and 7 tall. `.` is 
 - The horizontal segments `a`, `g`, `d` lie on rows 1, ⌊h/2⌋ + 1 and h. A drawn horizontal segment is `━` between the two corner cells of its row. A drawn vertical segment is `┃` in the first (left segments `f`, `e`) or last (right segments `b`, `c`) column on the rows between the horizontal ones; upper segments `f`, `b` on the rows above the middle row, lower segments `e`, `c` below it.
 - The six corner cells (top-left, top-right, middle-left, middle-right, bottom-left, bottom-right) take their character from the *arms* that meet there. Top-left: right arm if `a`, down arm if `f`. Top-right: left arm if `a`, down arm if `b`. Middle-left: right if `g`, up if `f`, down if `e`. Middle-right: left if `g`, up if `b`, down if `c`. Bottom-left: right if `d`, up if `e`. Bottom-right: left if `d`, up if `c`.
 - Arms to character: right `╺` · left `╸` · up `╹` · down `╻` · right+down `┏` · left+down `┓` · right+up `┗` · left+up `┛` · right+up+down `┣` · left+up+down `┫` · up+down `┃` · no arms: blank.
-- `1` is drawn as a single vertical in the middle column: `╻` on the first row, `┃` between, `╹` on the last row.
+- F3 and F5: `1` is drawn as a single vertical in the middle column: `╻` on the first row, `┃` between, `╹` on the last row.
+
+**F7 is drawn thick.** With one-cell strokes F7 looks thin beside F3 and F5, so it uses solid blocks instead of the corner rule above. The segments and glyph size (7×7) are the same, so every width and threshold in §2.2 is unchanged. {#UI-17a}
+- A horizontal segment is a full row of `█` (7 cells) on row 1, 4 or 7. A vertical segment is `██` in the first two (left) or last two (right) columns, on the rows from the horizontal segment's row up to the middle row (`f`, `b`) or down from it (`e`, `c`). On the middle row a vertical is drawn if either its upper or its lower segment is on.
+- `1` is `██` in the two middle columns (3 and 4 of 7) on every row, with no end caps.
+- `.` is `▄` (U+2584), one cell wide, on the last row. `-` is the middle row of `█`.
 
 Reference: `font-f3`, `font-f5`, `font-f7` (the characters `0123456789.-` in each font).
 

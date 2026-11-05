@@ -82,8 +82,71 @@ impl Font {
             .sum()
     }
 
+    /// F7 is drawn in solid blocks with two-cell strokes, so it keeps its
+    /// weight next to F3 and F5 (UI-17).
+    fn thick(self) -> bool {
+        self.h >= 7
+    }
+
+    /// The `h` rows of one thick glyph: horizontals are one row of `█`,
+    /// verticals two columns, a `.` is a half-block square at the baseline.
+    fn thick_glyph(self, ch: char) -> Vec<String> {
+        let h = self.h;
+        if ch == '.' {
+            let mut rows = vec![" ".to_string(); h];
+            rows[h - 1] = "▄".into();
+            return rows;
+        }
+        let Some(seg) = segments(ch) else {
+            return vec![" ".repeat(h); h];
+        };
+        let has = |s: u8| seg & s != 0;
+        let (mid, last) = (h / 2, h - 1);
+        let mut grid = vec![vec![' '; h]; h];
+        if ch == '1' {
+            for cells in &mut grid {
+                cells[h / 2 - 1] = '█';
+                cells[h / 2] = '█';
+            }
+        } else {
+            for (row, cells) in grid.iter_mut().enumerate() {
+                let (left, right) = if row <= mid {
+                    (has(F), has(B))
+                } else {
+                    (has(E), has(C))
+                };
+                let (left, right) = if row == mid {
+                    (has(F) || has(E), has(B) || has(C))
+                } else {
+                    (left, right)
+                };
+                if left {
+                    cells[..2].fill('█');
+                }
+                if right {
+                    cells[h - 2..].fill('█');
+                }
+                let horizontal = match row {
+                    0 => has(A),
+                    r if r == mid => has(G),
+                    r if r == last => has(D),
+                    _ => false,
+                };
+                if horizontal {
+                    cells.fill('█');
+                }
+            }
+        }
+        grid.into_iter()
+            .map(|cells| cells.into_iter().collect())
+            .collect()
+    }
+
     /// The `h` rows of one glyph. Characters without a glyph are blank.
     pub fn glyph(self, ch: char) -> Vec<String> {
+        if self.thick() {
+            return self.thick_glyph(ch);
+        }
         let h = self.h;
         if ch == '.' {
             let mut rows = vec![" ".to_string(); h];
