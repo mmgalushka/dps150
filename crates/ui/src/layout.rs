@@ -3,10 +3,8 @@
 
 use crate::font::{self, Font};
 
-/// Width of the Compact body (DESIGN.md §2.3).
+/// Width of the Compact body on the secondary screens (DESIGN.md §2.3).
 pub const COMPACT_WIDTH: u16 = 44;
-/// Rows of the Compact main panel including header and key bar.
-pub const COMPACT_ROWS: u16 = 14;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tier {

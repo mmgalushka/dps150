@@ -28,7 +28,7 @@ Output ON, constant-voltage: set 5.00 V / 1.500 A; measured 4.998 V, 0.512 A, 2.
 3. **Colour is never the only carrier.** Mode is a word in a badge, protection is a changed glyph plus a message, limiting is spelled out, focus is a `▸` plus a title. The UI must remain readable with colour off. {#UI-05}
 4. **Never show stale or unknown numbers as live.** If the device stops answering, measured values are replaced by dashes and the output state is shown as unknown (`?`), never as OFF. {#LNK-02}
 5. **Output OFF is always one key.** `Space` toggles output from every screen. Where `Space` is not a toggle (typed entry, prompts, the too-small screen) it cancels what is pending and can only turn the output OFF, never ON. `Ctrl-X` turns the output OFF in every mode, including text fields. {#SAF-01} {#SAF-02}
-6. **Fluid above a floor.** Below 80×21 a fixed Compact layout (44×16 minimum). From 80×21 up, one fluid layout that stretches to fill the whole terminal, like a btop panel: boxes take a share of the width and height, bars lengthen, and the big digits step up to a larger font when the box allows (§2.2). No cap on size, no centring in the fluid layout. [D]
+6. **Fluid above a floor.** Below 80×21 a Compact layout (44×16 minimum). From 80×21 up, one fluid layout that stretches to fill the whole terminal, like a btop panel: boxes take a share of the width and height, bars lengthen, and the big digits step up to a larger font when the box allows (§2.2). No cap on size, no centring in the fluid layout. [D]
 7. **Quiet.** No animation, blinking, spinners or mouse interaction in v1. [D] {#UI-13}
 8. **No silent substitutions.** A value the user typed is either applied exactly or rejected with a reason; it is never silently replaced by a different value. Every prompt that can energise a load shows the voltage and current it will apply. {#LIM-08}
 
@@ -42,7 +42,7 @@ Output ON, constant-voltage: set 5.00 V / 1.500 A; measured 4.998 V, 0.512 A, 2.
 
 ### 2.2 Layouts and sizing [D]
 
-There are two layouts: **Compact** (fixed, the floor) and **Fluid** (stretches to fill the terminal like a btop panel). Fluid has two width bands, *Standard* and *Large*, that differ only in what is shown. The layout and band are chosen from the terminal size `cols × rows`, tested in this order: {#UI-01}
+There are two layouts: **Compact** (the floor; on the main panel it stretches to the terminal, on the other screens it is a fixed 44-wide block) and **Fluid** (stretches to fill the terminal like a btop panel). Fluid has two width bands, *Standard* and *Large*, that differ only in what is shown. The layout and band are chosen from the terminal size `cols × rows`, tested in this order: {#UI-01}
 
 | Layout / band | Condition | Minimum size | Reference sizes (Appendix A) |
 |---|---|---|---|
@@ -81,11 +81,17 @@ Examples: 100×21 and 80×24 use F3; 100×30 uses F5; 120×40 uses F7. The choic
 
 **Secondary screens.** Stretching rules for Presets, Protection and Settings are in §8.5.
 
+**Main panel in the Compact layout.** The main panel fills the terminal like Fluid, with no margins and no maximum size. {#UI-03a}
+1. *Rows.* header 1 + readout boxes R + Status 4 + info row 1 + key bar 1, so R = rows − 7 (9 at 44×16).
+2. *Columns.* The boxes split the width as in Fluid (left takes the odd cell); Status spans the full width. The titles keep their unit: `VOLTAGE (V)`, `CURRENT (A)`.
+3. *Content.* With fewer than 10 inner rows the 5-line Compact block (digits, `SET`, cursor) is centred vertically in the box. From 10 inner rows (rows ≥ 19) the box holds the Fluid block in F3, with the short labels `SET` and `◂ LIM`, no unit after the digits and no indent. Left-aligned; spare width stays blank. Compact always uses F3.
+4. *Status.* From 56 columns a power bar follows the power value: 16 cells at 56 columns, one more per extra column, at most 30.
+
 ### 2.3 Placement
 
 - Header row (§5.9), live strip (§5.10) and key bar (§5.8) span the **full terminal width**; their background colour fills every cell to the right edge. In Compact their content is laid out for the 44-cell design width and the rest is fill; in the Fluid layout it is laid out for the actual width (§5.8, §5.9).
-- **Compact:** the body block has the design width (44) and is **centred horizontally**: left margin = ⌊(cols − 44) / 2⌋ cells, painted with the page background. **Fluid:** the body fills the terminal (§2.2); there is no margin. {#UI-03}
-- Vertically, Compact is **top-aligned and contiguous**, rows below it painted with the page background. Fluid fills every row (§2.2).
+- **Compact, secondary screens and help:** the body block has the design width (44) and is **centred horizontally**: left margin = ⌊(cols − 44) / 2⌋ cells, painted with the page background. **Fluid:** the body fills the terminal (§2.2); there is no margin. {#UI-03}
+- Vertically, those Compact screens are **top-aligned and contiguous**, rows below them painted with the page background. The Compact main panel is stretched (§2.2). Fluid fills every row (§2.2).
 - Resizing re-evaluates the layout, band and digit font immediately and redraws everything. All state (selection, edit in progress, prompts) is preserved while the terminal stays usable. When it becomes too small (§2.4), pending prompts and typed entry are cancelled; nothing is applied. [D] {#UI-12}
 
 ### 2.4 Too-small screen [D] {#SAF-10}
