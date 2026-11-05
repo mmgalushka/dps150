@@ -38,7 +38,7 @@ Output ON, constant-voltage: set 5.00 V / 1.500 A; measured 4.998 V, 0.512 A, 2.
 
 - UTF-8 terminal required. If the locale is not UTF-8, print one line to stderr ("dps150 needs a UTF-8 terminal") and exit with a non-zero status before entering the alternate screen. [D] {#UI-10}
 - Every glyph in §4.1 is treated as **1 cell wide**. Some of them (○ ● ▸ ◂ ✓) are "ambiguous width" in East-Asian-locale terminals; those terminals are unsupported in v1.
-- The application uses the alternate screen, hides the cursor, and restores both on exit and on panic/signal. [D] {#UI-11}
+- The application uses the alternate screen, hides the cursor, and restores both on exit and on panic/signal. It also captures the mouse (and releases it the same way) so that the terminal does not turn the wheel into ↑/↓ key presses, which would change the set values, or scroll its history; mouse events are ignored. Selecting text then needs Shift (Option in macOS Terminal and iTerm2). [D] {#UI-11}
 
 ### 2.2 Layouts and sizing [D]
 
