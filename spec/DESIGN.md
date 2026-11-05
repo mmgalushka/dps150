@@ -199,7 +199,7 @@ Detect once at start, in this order: {#UI-04}
 | Box (rounded) | `╭ ╮ ╰ ╯ ─ │` |
 | Bar | `━` fill, `─` track |
 | Big digits | `┏ ┓ ┗ ┛ ┃ ━ ┣ ┫ ╺ ╸ ╻ ╹` (F3, F5); `█ ▄` (F7) |
-| Digit cursor | `▔` (U+2594) |
+| Digit cursor | `▔` (U+2594); `▁` (U+2581) under F7 |
 | Lamps | `○` armed, `●` tripped / connected |
 | Markers | `▸` selected row, `◂ ▸` option arrows, `✓` valid, `✗` invalid / rule violated, `!` warning |
 | Text | `· ° → ↑ ↓ ← ⏎ … – ×` |
@@ -245,6 +245,7 @@ F5 glyphs are 5 cells wide and 5 rows tall, F7 glyphs 7 wide and 7 tall. `.` is 
 **F7 is drawn thick.** With one-cell strokes F7 looks thin beside F3 and F5, so it uses solid blocks instead of the corner rule above. The segments and glyph size (7×7) are the same, so every width and threshold in §2.2 is unchanged. {#UI-17a}
 - A horizontal segment is a full row of `█` (7 cells) on row 1, 4 or 7. A vertical segment is `██` in the first two (left) or last two (right) columns, on the rows from the horizontal segment's row up to the middle row (`f`, `b`) or down from it (`e`, `c`). On the middle row a vertical is drawn if either its upper or its lower segment is on.
 - `1` is `██` in the two middle columns (3 and 4 of 7) on every row, with no end caps.
+- The digit cursor under F7 is `▁` (U+2581) across the glyph, not `▔`: at the top of its cell `▔` would touch the solid bottom bar of the digit and disappear into it.
 - `.` is `▄` (U+2584), one cell wide, on the last row. `-` is the middle row of `█`.
 
 Reference: `font-f3`, `font-f5`, `font-f7` (the characters `0123456789.-` in each font).

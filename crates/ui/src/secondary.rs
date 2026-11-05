@@ -424,7 +424,7 @@ fn preset_edit_box(p: &mut Painter, model: &Model, rect: Rect) {
         p.text(
             margin + font.start_of(&v_text, index) as u16,
             y0 + 1 + h,
-            &"▔".repeat(font.height()),
+            &font.caret(),
             S::Cur,
         );
     }
@@ -437,7 +437,7 @@ fn preset_edit_box(p: &mut Painter, model: &Model, rect: Rect) {
         p.text(
             margin + font.start_of(&i_text, index) as u16,
             y0 + 2 * h + 3,
-            &"▔".repeat(font.height()),
+            &font.caret(),
             S::Cur,
         );
     }
@@ -740,7 +740,7 @@ fn protection_edit_box(p: &mut Painter, model: &Model, rect: Rect) {
     if editing && typed.is_none() {
         let digits = limit.digits(candidate);
         let x = margin + font.start_of(&digits, limit.char_of_digit(cursor)) as u16;
-        p.text(x, y0 + h, &"▔".repeat(font.height()), S::Cur);
+        p.text(x, y0 + h, &font.caret(), S::Cur);
     }
 
     // The three info lines to the right of the digits.

@@ -82,6 +82,14 @@ impl Font {
             .sum()
     }
 
+    /// The cursor under a digit: as wide as the glyph. `▔` sits at the top of
+    /// its cell, which would merge with the solid bottom bar of a thick digit,
+    /// so F7 uses `▁` at the bottom of the cell instead.
+    pub fn caret(self) -> String {
+        let mark = if self.thick() { "▁" } else { "▔" };
+        mark.repeat(self.h)
+    }
+
     /// F7 is drawn in solid blocks with two-cell strokes, so it keeps its
     /// weight next to F3 and F5 (UI-17).
     fn thick(self) -> bool {
