@@ -568,19 +568,52 @@ fn ui_12_resize_keeps_the_model_and_reevaluates_the_tier() {
 }
 
 #[test]
-fn ui_03_compact_is_centred_and_top_aligned_while_the_bars_span_the_width() {
+fn ui_03_compact_stretches_to_fill_the_terminal() {
     let model = model_with(example_dump(), PORT);
-    let lines = draw(&model, 60, 20);
-    // Body centred: (60 - 44) / 2 = 8 blank cells on the left of the boxes.
-    assert!(lines[1].starts_with("        ╭"), "{:?}", lines[1]);
-    // Top-aligned: rows below the 14-row block are blank.
-    assert!(lines[14..].iter().all(|l| l.is_empty()));
+    for (cols_, rows_) in [(44, 16), (60, 20), (79, 20), (44, 40), (70, 30)] {
+        let lines = draw(&model, cols_, rows_);
+        let at = format!("{cols_}x{rows_}");
+        // No margin: the boxes start at column 0 and reach the right edge.
+        assert!(lines[1].starts_with('\u{256d}'), "{at}: {:?}", lines[1]);
+        assert_eq!(lines[1].chars().count(), usize::from(cols_), "{at}");
+        assert!(
+            lines[usize::from(rows_) - 1].contains("help"),
+            "{at}: key bar last"
+        );
+        // Every row between the header and the key bar is used by the boxes.
+        let status = lines
+            .iter()
+            .position(|l| l.starts_with("\u{256d}\u{2500} Status"))
+            .unwrap();
+        assert_eq!(status, usize::from(rows_) - 6, "{at}: status box position");
+    }
     // The header's bar background reaches both edges.
     let mut buf = Buffer::empty(Rect::new(0, 0, 60, 20));
     render(&model, &mut buf, Theme::new(Depth::TrueColor));
     let bar = buf[(0, 0)].bg;
     assert_eq!(buf[(59, 0)].bg, bar);
     assert_ne!(buf[(0, 1)].bg, bar);
+}
+
+#[test]
+fn ui_03_compact_uses_the_tall_block_and_a_power_bar_when_there_is_room() {
+    let model = model_with(example_dump(), PORT);
+    let narrow = draw(&model, 44, 16);
+    assert!(!narrow.iter().any(|l| l.contains("MEASURED")));
+    let tall = draw(&model, 44, 24);
+    assert_eq!(tall.join("\n").matches("MEASURED").count(), 2);
+    // Narrow boxes keep their border: nothing is written over it.
+    assert!(tall.iter().all(|l| l.chars().count() <= 44));
+    assert!(
+        !narrow
+            .iter()
+            .any(|l| l.contains('\u{2501}') && l.contains("2.56 W"))
+    );
+    let wide = draw(&model, 60, 16);
+    assert!(
+        wide.iter()
+            .any(|l| l.contains("2.56 W") && l.contains('\u{2501}'))
+    );
 }
 
 #[test]

@@ -5,14 +5,18 @@ use protocol::Mode;
 use protocol::value::{Milliamps, Millivolts};
 use ratatui::layout::Rect;
 
-use crate::font::Font;
+use crate::font::{self, Font};
 use crate::format;
-use crate::layout::{COMPACT_ROWS, COMPACT_WIDTH, Tier, pick_font};
+use crate::layout::{COMPACT_WIDTH, Tier, pick_font};
 use crate::paint::Painter;
 use crate::theme::S;
 
 const LAMPS: [&str; 5] = ["OVP", "OCP", "OPP", "OTP", "LVP"];
 const MAX_POWER: f32 = 150.0;
+/// Width from which the stretched Compact status shows a power bar, and the
+/// bar's length there.
+const COMPACT_BAR_FROM: u16 = 56;
+const COMPACT_BAR_MIN: usize = 16;
 
 /// Output state as the badges show it (§5.5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -405,15 +409,28 @@ pub(crate) fn compact_header(p: &mut Painter, view: &View, area: Rect) {
 }
 
 fn compact(p: &mut Painter, view: &View, area: Rect) {
-    let x0 = area.x + area.width.saturating_sub(COMPACT_WIDTH) / 2;
-    let y0 = area.y;
-    compact_header(p, view, area);
+    let (x0, y0, cols, rows) = (area.x, area.y, area.width, area.height);
+    header(p, view, x0, y0, cols, Tier::Compact);
 
-    compact_readout(p, view, Rect::new(x0, y0 + 1, 22, 7), Focus::Voltage);
-    compact_readout(p, view, Rect::new(x0 + 22, y0 + 1, 22, 7), Focus::Current);
+    // Readout boxes take every spare row, as in the Fluid layout (§2.2).
+    let body_rows = rows - 7;
+    let left_width = cols - cols / 2;
+    let right_width = cols / 2;
+    compact_readout(
+        p,
+        view,
+        Rect::new(x0, y0 + 1, left_width, body_rows),
+        Focus::Voltage,
+    );
+    compact_readout(
+        p,
+        view,
+        Rect::new(x0 + left_width, y0 + 1, right_width, body_rows),
+        Focus::Current,
+    );
 
     // Status box.
-    let status = Rect::new(x0, y0 + 8, COMPACT_WIDTH, 4);
+    let status = Rect::new(x0, y0 + 1 + body_rows, cols, 4);
     p.boxed(status, ("Status", S::Ti), None, S::Bd);
     let inner_x = status.x + 2;
     let mode = match view.lit {
@@ -430,11 +447,24 @@ fn compact(p: &mut Painter, view: &View, area: Rect) {
         _ => output_badge(p, column, status.y + 1, view),
     };
     let column = p.text(column, status.y + 1, "  ", S::Page);
-    p.text(column, status.y + 1, &power_text(view), S::Pw);
+    let column = p.text(column, status.y + 1, &power_text(view), S::Pw);
+    // A power bar once the box is wide enough for it.
+    if cols >= COMPACT_BAR_FROM {
+        let power = view.measured.map_or(0.0, |(_, _, p)| p);
+        let width = usize::from(cols - COMPACT_BAR_FROM) + COMPACT_BAR_MIN;
+        let column = p.text(column, status.y + 1, " ", S::Page);
+        p.bar(
+            column,
+            status.y + 1,
+            power / MAX_POWER,
+            width.min(30),
+            S::Pw,
+        );
+    }
     lamps(p, inner_x, status.y + 2, view);
 
     // Info row.
-    let info_y = y0 + 12;
+    let info_y = status.y + 4;
     // A question comes first, then a transient message, which replaces the
     // standing text for its three seconds.
     if let Some(prompt) = &view.prompt {
@@ -460,8 +490,7 @@ fn compact(p: &mut Painter, view: &View, area: Rect) {
             ],
         );
     }
-    debug_assert_eq!(y0 + COMPACT_ROWS - 1, y0 + 13);
-    key_bar(p, x0, y0 + 13, COMPACT_WIDTH, view.entry.is_some());
+    key_bar(p, x0, y0 + rows - 1, cols, view.entry.is_some());
 }
 
 fn compact_readout(p: &mut Painter, view: &View, rect: Rect, which: Focus) {
@@ -476,7 +505,14 @@ fn compact_readout(p: &mut Painter, view: &View, rect: Rect, which: Focus) {
         (name.to_string(), S::Ti, S::Bd)
     };
     p.boxed(rect, (&title, title_style), None, border);
-    let (x, y) = (rect.x + 2, rect.y + 1);
+    // Room for the full block of the Fluid layout: use it.
+    if usize::from(rect.height) - 2 >= 2 * font::F3.height() + 4 {
+        fluid_content(p, view, rect, which, font::F3, true);
+        return;
+    }
+    // The 5-line block, centred in the spare rows.
+    let spare = rect.height.saturating_sub(7);
+    let (x, y) = (rect.x + 2, rect.y + 1 + spare / 2);
     let (digits, digit_style, set_text) = match which {
         Focus::Voltage => (
             view.measured.map_or_else(
@@ -587,19 +623,26 @@ fn fluid_readout(p: &mut Painter, view: &View, rect: Rect, which: Focus, font: F
         (name.to_string(), S::Ti, S::Bd)
     };
     p.boxed(rect, (&title, title_style), None, border);
+    fluid_content(p, view, rect, which, font, false);
+}
 
+/// The content block of a readout box: `MEASURED`, the digits, the `SET` line
+/// and the set digits. `narrow` is the stretched Compact: shorter labels, no
+/// unit after the digits (the title carries it).
+fn fluid_content(p: &mut Painter, view: &View, rect: Rect, which: Focus, font: Font, narrow: bool) {
+    let focused = view.focus == which;
     let h = font.height() as u16;
     let inner = Rect::new(rect.x + 2, rect.y + 1, rect.width - 4, rect.height - 2);
     let block = 2 * h + 4;
     let spare = inner.height.saturating_sub(block);
     let top = inner.y + spare / 2;
-    let margin = inner.x + 1;
+    let margin = if narrow { inner.x } else { inner.x + 1 };
 
     let (digits, digit_style, unit, set_text) = match which {
         Focus::Voltage => (
             view.measured.map_or_else(
                 || "-.---".to_string(),
-                |(v, _, _)| format::measured_voltage(v, false),
+                |(v, _, _)| format::measured_voltage(v, narrow),
             ),
             S::Ch1,
             "V",
@@ -623,7 +666,7 @@ fn fluid_readout(p: &mut Painter, view: &View, rect: Rect, which: Focus, font: F
     for (row, line) in rows.iter().enumerate() {
         let y = top + 1 + row as u16;
         let end = p.text(margin, y, line, digit_style);
-        if row + 1 == rows.len() {
+        if row + 1 == rows.len() && !narrow {
             let end = p.text(end, y, &format!("  {unit}"), digit_style);
             if which == Focus::Current && view.lit == Lit::Cc {
                 p.text(end, y, "   ◂ limiting", S::Wn);
@@ -631,7 +674,14 @@ fn fluid_readout(p: &mut Painter, view: &View, rect: Rect, which: Focus, font: F
         }
     }
     let set_y = top + 1 + h + 1;
-    p.text(inner.x, set_y, "SET  ←→ digit  ↑↓ value", S::D);
+    if narrow {
+        let end = p.text(inner.x, set_y, "SET", S::D);
+        if which == Focus::Current && view.lit == Lit::Cc {
+            p.text(end, set_y, "  ◂ LIM", S::Wn);
+        }
+    } else {
+        p.text(inner.x, set_y, "SET  ←→ digit  ↑↓ value", S::D);
+    }
     let typing = view.entry.as_ref().filter(|(focus, _, _)| *focus == which);
     if let Some((_, text, rejected)) = typing {
         // Typed characters in the big font, no leading-zero padding (§6.2).
@@ -639,7 +689,12 @@ fn fluid_readout(p: &mut Painter, view: &View, rect: Rect, which: Focus, font: F
         for (row, line) in font.render(text).iter().enumerate() {
             p.text(margin, set_y + 1 + row as u16, line, style);
         }
-        p.text(inner.x, set_y + 1 + h, "⏎ apply · Esc cancel", S::D);
+        let hint = if narrow {
+            "⏎ set  Esc cancel"
+        } else {
+            "⏎ apply · Esc cancel"
+        };
+        p.text(inner.x, set_y + 1 + h, hint, S::D);
         return;
     }
     for (row, line) in font.render(&set_text).iter().enumerate() {
