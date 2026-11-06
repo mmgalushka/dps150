@@ -35,6 +35,6 @@ jobs:
             sleep 30
           done
           gh release upload "$TAG" target/debian/*.deb --clobber
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: target/debian/*.deb
