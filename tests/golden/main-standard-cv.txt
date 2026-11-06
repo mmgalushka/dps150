@@ -21,4 +21,4 @@
 │ POWER 2.56 W ━───────────────── of 150 W   Vin 20.25 V  T 24.3 °C            │
 ╰──────────────────────────────────────────────────────────────────────────────╯
  M1  3.3/1   M2  5/1   M3  9/2   M4  12/2   M5  5/0.5  !M6  24/2   m 1-6 recall
- Space  output   ←→  digit   ↑↓  value   ⏎  type   Tab  V/I   ?  help
+ Space  output   ←→  digit   ↑↓  value   ⏎  type   q  quit   ?  help

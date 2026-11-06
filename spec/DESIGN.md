@@ -441,9 +441,9 @@ Which badge is lit: output ON and mode CV → CV lit; output ON and mode CC → 
 
 ### 6.6 Key bar priority (main panel)
 
-`Space output`, `←→ digit`, `↑↓ value`, `⏎ type`, `Tab V/I`, `p presets`, `o protect`, `, settings`, `m recall`, then the reserved `? help` (§5.8). `q quit` is listed in help, not in the bar. [D]
+`Space output`, `←→ digit`, `↑↓ value`, `⏎ type`, `Tab V/I`, `p presets`, `o protect`, `, settings`, `m recall`, then the reserved tail `q quit` and `? help` (§5.8); the tail is placed first, so it is always visible. [D]
 
-At the reference widths (44, 80, 100) this gives: Compact `Space output · ←→ digit`; Standard `Space output · ←→ digit · ↑↓ value · ⏎ type · Tab V/I`; Large additionally `p presets · o protect`; at 120 columns `, settings` also fits (`main-cv-120x40`). `v` / `i` (type voltage / current directly, §7.2) are not in the bar: no extra item fits at 80 columns, and `⏎ type` already advertises typed entry; they are listed in the help overlay. The screen keys `p s o ,` and `m` that do not fit are listed in the help overlay (§5.13) and the Standard preset row carries the `m 1-6 recall` hint.
+At the reference widths (44, 80, 100) this gives: Compact `Space output · q quit`; Standard `Space output · ←→ digit · ↑↓ value · ⏎ type`; Large additionally `Tab V/I · p presets`; at 120 columns `o protect` also fits (`main-cv-120x40`). `v` / `i` (type voltage / current directly, §7.2) are not in the bar: no extra item fits at 80 columns, and `⏎ type` already advertises typed entry; they are listed in the help overlay. The screen keys `p s o ,` and `m` that do not fit are listed in the help overlay (§5.13) and the Standard preset row carries the `m 1-6 recall` hint.
 
 ### 6.7 States
 
