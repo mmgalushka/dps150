@@ -1,10 +1,13 @@
 //! `dps150`: argument parsing and wiring of the layers.
 
-use std::io::{self, Stdout};
+use std::io::{self, Stdout, Write as _};
+use std::mem::ManuallyDrop;
 use std::panic;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use app::{Action, Effect, Key, Model, Outcome, PortInfo, Shutdown};
@@ -35,7 +38,8 @@ fn main() -> ExitCode {
     match run(&cli) {
         Ok(status) => ExitCode::from(status),
         Err(message) => {
-            eprintln!("{message}");
+            // `eprintln!` would panic if the terminal has gone away.
+            let _ = writeln!(io::stderr(), "{message}");
             ExitCode::from(1)
         }
     }
@@ -121,22 +125,52 @@ fn run(cli: &app::Cli) -> Result<u8, String> {
     }
 
     let mut terminal = TerminalGuard::enter().map_err(|e| format!("dps150: terminal: {e}"))?;
+    let inputs = spawn_input().map_err(|e| format!("dps150: terminal: {e}"))?;
     let outcome = event_loop(
         &mut terminal,
         &mut model,
         &device,
         &depth_for,
         &stop,
+        &inputs,
         (names_file.as_deref(), path.as_deref()),
     );
     // Leave the alternate screen first: the line below is the last thing
     // written (SAF-11).
     drop(terminal);
-    let outcome = outcome.map_err(|e| format!("dps150: {e}"))?;
     if let Some(line) = &outcome.line {
-        println!("{line}");
+        // `println!` would panic if the terminal has gone away (SIGHUP).
+        let _ = writeln!(io::stdout(), "{line}");
     }
     Ok(outcome.status)
+}
+
+/// What the input thread passes on.
+enum Input {
+    Event(Event),
+    /// The terminal cannot be read any more.
+    Gone,
+}
+
+/// Reads terminal events on their own thread. After a hangup crossterm's
+/// read never returns (it retries the dead terminal forever), so the event
+/// loop must never wait on it: it would never run the quit sequence (SAF-11).
+/// The thread is not joined; it ends with the process.
+fn spawn_input() -> io::Result<Receiver<Input>> {
+    let (sender, receiver) = mpsc::channel();
+    thread::Builder::new().name("input".into()).spawn(move || {
+        loop {
+            let input = match event::read() {
+                Ok(event) => Input::Event(event),
+                Err(_) => Input::Gone,
+            };
+            let gone = matches!(input, Input::Gone);
+            if sender.send(input).is_err() || gone {
+                return;
+            }
+        }
+    })?;
+    Ok(receiver)
 }
 
 /// Starts the quit sequence and sends its first actions (SAF-11, SAF-14).
@@ -166,12 +200,16 @@ fn event_loop(
     device: &Device,
     depth_for: &dyn Fn(app::ColorSetting) -> ui::Depth,
     stop: &AtomicBool,
+    inputs: &Receiver<Input>,
     files: (Option<&std::path::Path>, Option<&std::path::Path>),
-) -> io::Result<Outcome> {
+) -> Outcome {
     let (names_file, config_file) = files;
     let begin = Instant::now();
     let mut last_draw = begin;
     let mut dirty = true;
+    // The terminal hung up or cannot be drawn on: stop using it, and quit as
+    // for `SIGHUP`. A terminal error never skips the quit sequence (SAF-11).
+    let mut terminal_gone = false;
     // Once a quit has started, the sequence runs while the screen stays up.
     let mut shutdown: Option<Shutdown> = None;
     loop {
@@ -181,9 +219,9 @@ fn event_loop(
         if *model != before {
             dirty = true;
         }
-        // `SIGTERM`, `SIGHUP`, `SIGINT`: quit without a prompt, by the On exit
-        // setting (SAF-11).
-        if stop.load(Ordering::Relaxed) && shutdown.is_none() {
+        // `SIGTERM`, `SIGHUP`, `SIGINT`, or the terminal gone: quit without a
+        // prompt, by the On exit setting (SAF-11).
+        if (stop.load(Ordering::Relaxed) || terminal_gone) && shutdown.is_none() {
             shutdown = Some(begin_shutdown(model, device, now, false));
         }
         while let Ok(message) = device.messages().try_recv() {
@@ -196,7 +234,7 @@ fn event_loop(
         if let Some(sequence) = shutdown.as_mut() {
             run_actions(device, sequence.tick(now));
             if let Some(outcome) = sequence.finished() {
-                return Ok(outcome.clone());
+                return outcome.clone();
             }
         } else {
             // Writes no key caused, such as the OFF queued during a link loss,
@@ -207,13 +245,20 @@ fn event_loop(
         }
         // Below the floor only OFF and Ctrl-C work, and nothing pending
         // survives (SAF-09, SAF-10).
-        if let Ok((cols, rows)) = ratatui::crossterm::terminal::size() {
+        if !terminal_gone && let Ok((cols, rows)) = ratatui::crossterm::terminal::size() {
             let tier = ui::Tier::select(cols, rows);
             model.set_too_small(tier == ui::Tier::TooSmall);
             model.set_compact(tier == ui::Tier::Compact);
         }
-        if event::poll(FRAME)? {
-            match event::read()? {
+        let input = match inputs.recv_timeout(FRAME) {
+            Ok(input) => Some(input),
+            Err(RecvTimeoutError::Timeout) => None,
+            Err(RecvTimeoutError::Disconnected) => Some(Input::Gone),
+        };
+        match input {
+            None => {}
+            Some(Input::Gone) => terminal_gone = true,
+            Some(Input::Event(event)) => match event {
                 Event::Key(key) if key.kind != KeyEventKind::Release => {
                     if let Some(key) = map_key(key) {
                         dirty = true;
@@ -250,16 +295,20 @@ fn event_loop(
                 Event::Resize(..) => dirty = true,
                 // The wheel and clicks do nothing (the mouse is captured).
                 _ => {}
-            }
+            },
         }
         if let Some(outcome) = shutdown.as_ref().and_then(Shutdown::finished) {
-            return Ok(outcome.clone());
+            return outcome.clone();
         }
-        if dirty || last_draw.elapsed() >= REDRAW {
+        if !terminal_gone && (dirty || last_draw.elapsed() >= REDRAW) {
             let theme = ui::Theme::new(depth_for(model.config().colors));
-            terminal
+            if terminal
                 .0
-                .draw(|frame| ui::render(model, frame.buffer_mut(), theme))?;
+                .draw(|frame| ui::render(model, frame.buffer_mut(), theme))
+                .is_err()
+            {
+                terminal_gone = true;
+            }
             last_draw = Instant::now();
             dirty = false;
         }
@@ -318,7 +367,11 @@ fn map_key(key: KeyEvent) -> Option<Key> {
 
 /// Raw mode, the alternate screen, mouse capture and a hidden cursor, all
 /// undone on drop, on a panic and on a signal (UI-11).
-struct TerminalGuard(Terminal<CrosstermBackend<Stdout>>);
+///
+/// The `Terminal` itself is never dropped: its `Drop` shows the cursor and
+/// reports a failure with `eprintln!`, which panics (and then aborts) once
+/// the terminal has hung up. `restore` shows the cursor instead.
+struct TerminalGuard(ManuallyDrop<Terminal<CrosstermBackend<Stdout>>>);
 
 impl TerminalGuard {
     fn enter() -> io::Result<Self> {
@@ -327,7 +380,8 @@ impl TerminalGuard {
         let previous = panic::take_hook();
         panic::set_hook(Box::new(move |info| {
             restore();
-            eprintln!("dps150: internal error, output state unknown");
+            // Not `eprintln!`: a panic inside the hook aborts.
+            let _ = writeln!(io::stderr(), "dps150: internal error, output state unknown");
             previous(info);
         }));
         enable_raw_mode()?;
@@ -336,7 +390,9 @@ impl TerminalGuard {
         // ↑/↓ keys (which would change the set values) or scrolling its
         // history; the events themselves are ignored by the event loop.
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture, Hide)?;
-        Ok(Self(Terminal::new(CrosstermBackend::new(stdout))?))
+        Ok(Self(ManuallyDrop::new(Terminal::new(
+            CrosstermBackend::new(stdout),
+        )?)))
     }
 }
 

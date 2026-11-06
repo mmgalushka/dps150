@@ -8,6 +8,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -39,7 +40,9 @@ fn sim_binary() -> PathBuf {
 impl Sim {
     fn start() -> Self {
         let binary = sim_binary();
-        let mut child = Command::new(&binary)
+        let mut command = Command::new(&binary);
+        no_inherited_fds(&mut command);
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -223,11 +226,36 @@ fn app_05_a_broken_config_is_reported_on_the_first_screen_and_never_overwritten(
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// Keeps the child from inheriting this process's other descriptors.
+/// `TTYPort::pair` opens the pty master without `O_CLOEXEC`, so without this
+/// every child (the app itself, and those of tests running in parallel) holds
+/// a copy of every master, and closing the master in `Tui::hangup` would never
+/// hang the pty up. std's own exec-error pipe is close-on-exec already.
+fn no_inherited_fds(command: &mut Command) {
+    // SAFETY: one async-signal-safe syscall between fork and exec. A kernel
+    // without `close_range` (before 5.11) just leaves the descriptors open.
+    unsafe {
+        command.pre_exec(|| {
+            libc::syscall(
+                libc::SYS_close_range,
+                3u32,
+                u32::MAX,
+                libc::CLOSE_RANGE_CLOEXEC,
+            );
+            Ok(())
+        });
+    }
+}
+
 // ---- the program on a pty ----------------------------------------------------
 
 struct Tui {
     child: Child,
-    master: TTYPort,
+    /// `None` after `hangup`.
+    master: Option<TTYPort>,
+    /// Tells the reader thread to drop its clone of the master.
+    reader_stop: Arc<AtomicBool>,
+    reader: Option<thread::JoinHandle<()>>,
     screen: Arc<Mutex<vt100::Parser>>,
     raw: Arc<Mutex<Vec<u8>>>,
     _slave: TTYPort,
@@ -278,6 +306,7 @@ impl Tui {
         for (name, value) in envs {
             command.env(name, value);
         }
+        no_inherited_fds(&mut command);
         // Make the test pty the app's controlling terminal. crossterm reads
         // the size and the keys from /dev/tty, so without this the app would
         // see whatever terminal `cargo test` itself is run from.
@@ -297,9 +326,11 @@ impl Tui {
         let raw = Arc::new(Mutex::new(Vec::new()));
         let (reader_screen, reader_raw) = (Arc::clone(&screen), Arc::clone(&raw));
         let mut reader = master.try_clone_native().expect("clone master");
-        thread::spawn(move || {
+        let reader_stop = Arc::new(AtomicBool::new(false));
+        let stop = Arc::clone(&reader_stop);
+        let reader = thread::spawn(move || {
             let mut buffer = [0u8; 4096];
-            loop {
+            while !stop.load(Ordering::Relaxed) {
                 match reader.read(&mut buffer) {
                     Ok(0) => return,
                     Ok(count) => {
@@ -316,7 +347,9 @@ impl Tui {
         });
         Self {
             child,
-            master,
+            master: Some(master),
+            reader_stop,
+            reader: Some(reader),
             screen,
             raw,
             _slave: slave,
@@ -350,7 +383,11 @@ impl Tui {
     }
 
     fn send(&mut self, bytes: &[u8]) {
-        self.master.write_all(bytes).unwrap();
+        self.master
+            .as_mut()
+            .expect("not hung up")
+            .write_all(bytes)
+            .unwrap();
     }
 
     /// Resizes the terminal the way a window manager would. The emulator is
@@ -379,6 +416,18 @@ impl Tui {
             .args(["-WINCH", &self.child.id().to_string()])
             .status()
             .unwrap();
+    }
+
+    /// Closes every handle on the master side, as when the terminal window
+    /// is closed or an SSH session drops: the kernel hangs up the pty and
+    /// sends `SIGHUP` to the app, and its terminal can no longer be read or
+    /// written.
+    fn hangup(&mut self) {
+        self.reader_stop.store(true, Ordering::Relaxed);
+        if let Some(reader) = self.reader.take() {
+            reader.join().unwrap();
+        }
+        self.master = None;
     }
 
     fn wait_exit(&mut self) -> i32 {
@@ -1372,6 +1421,28 @@ fn saf_11_sigterm_turns_the_output_off_when_the_setting_says_so() {
     assert_eq!(after_leaving(&tui.raw_text()), "dps150: output turned OFF");
     assert_eq!(sim.state()["output"], "off");
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Closing the terminal window is a `SIGHUP` with the terminal gone as well:
+/// it can be neither read nor drawn on. The quit sequence must run all the
+/// same, follow On exit and close the session, so the panel is unlocked.
+#[test]
+fn saf_11_a_terminal_hangup_follows_on_exit_and_closes_the_session() {
+    for (on_exit, output) in [("off", "off"), ("leave", "on")] {
+        let config = format!("on_exit = \"{on_exit}\"\n");
+        let dir = config_dir(&format!("hangup-{on_exit}"), &[("config.toml", &config)]);
+        let xdg = dir.to_str().unwrap().to_string();
+        let mut sim = Sim::start();
+        sim.command("panel on");
+        let mut tui = Tui::start(&sim, &[("XDG_CONFIG_HOME", &xdg)]);
+        tui.wait_for("OUTPUT  ON");
+        tui.hangup();
+        assert_eq!(tui.wait_exit(), 0, "{on_exit}: exits, without a panic");
+        let state = sim.state();
+        assert_eq!(state["output"], output, "{on_exit}");
+        assert_eq!(state["locked"], "false", "{on_exit}: released");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
 
 #[test]
