@@ -1,0 +1,38 @@
+name: Bug report
+description: Something does not work as the spec says
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: If it reproduces on the simulator (`dps150-sim`), say so; that is the easiest to fix.
+  - type: input
+    id: version
+    attributes:
+      label: Output of `dps150 --version`
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS and terminal
+      placeholder: macOS 15 / iTerm2, Ubuntu 24.04 / GNOME Terminal
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and firmware
+      description: Shown in the header of the main panel, e.g. `DPS-150 fw V1.2 hw V1.0`. Write "simulator" if you used the simulator.
+  - type: textarea
+    id: output
+    attributes:
+      label: Screenshot or terminal text
+      description: Terminal size matters (columns × rows).

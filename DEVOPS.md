@@ -19,7 +19,7 @@ Status: baseline, 2026-10-30. Owns the toolchain, the development and test workf
 Items marked *(planned)* do not exist yet; the rest is in the repository.
 
 ```
-README.md  CONTRIBUTING.md  DEVOPS.md  LICENSE  .gitignore
+README.md  CONTRIBUTING.md  DEVOPS.md  CHANGELOG.md  CODE_OF_CONDUCT.md  SECURITY.md  LICENSE  .gitignore
 Cargo.toml                 workspace root; also the package of the `dps150` binary
 Cargo.lock                 committed: the project ships a binary
 rust-toolchain.toml
@@ -34,6 +34,7 @@ crates/                    one crate per layer of spec/MAIN.md §5
   simulator/               library `SimDevice` and binary `dps150-sim`
 spec/                      specification (spec/MAIN.md is the start)
 scripts/                   hardware bridge and attach scripts (§4.1)
+docs/images/               README screenshots, collage and device photo
 tests/
   fixtures/                captured device bytes, read by `protocol` and `simulator` tests
   golden/                  reference renderings, read by `ui` tests (spec/DESIGN.md Appendix A)
@@ -119,6 +120,9 @@ Two GitHub Actions workflows.
 - `cargo clippy --workspace --all-targets --locked -- -D warnings`
 - `cargo test --workspace --locked` on Linux and macOS
 - dependency audit (`cargo deny --locked check`, policy in `deny.toml`)
+- coverage: `cargo llvm-cov --workspace` on Linux, uploaded to Codecov (needs the repository secret `CODECOV_TOKEN`; the job never fails the build and `codecov.yml` keeps the status informational)
+
+Dependabot (`.github/dependabot.yml`) opens weekly pull requests for Cargo dependencies and monthly ones for GitHub Actions.
 
 The root `Cargo.toml` is also the `dps150` package, so without `--workspace` (`--all` for `fmt`) cargo covers that package alone and skips the crates.
 

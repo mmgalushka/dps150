@@ -8,6 +8,15 @@
 !/README.md
 !/CONTRIBUTING.md
 !/DEVOPS.md
+!/CHANGELOG.md
+!/CODE_OF_CONDUCT.md
+!/SECURITY.md
+!/codecov.yml
+
+# README images
+!/docs/
+!/docs/images/
+!/docs/images/*.png
 
 # Specs: markdown only
 !/spec/
@@ -57,6 +66,10 @@
 !/.github/
 !/.github/workflows/
 !/.github/workflows/*.yml
+!/.github/dependabot.yml
+!/.github/PULL_REQUEST_TEMPLATE.md
+!/.github/ISSUE_TEMPLATE/
+!/.github/ISSUE_TEMPLATE/*.yml
 
 # cargo-dist configuration
 !/dist-workspace.toml

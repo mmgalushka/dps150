@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest a change in behaviour
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        dps150 is developed from its specification in `spec/`. A behaviour change starts as a change to the spec, so a request that names the rule it would change is the most useful kind. See [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md#spec-driven-development).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do that you cannot do now?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to happen?
+  - type: input
+    id: rule
+    attributes:
+      label: Spec rule it touches (if you know)
+      placeholder: e.g. PRE-03, SAF-08, spec/DESIGN.md §8.1
