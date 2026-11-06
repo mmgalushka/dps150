@@ -13,4 +13,4 @@
 │ ○ OVP  ○ OCP  ○ OPP  ○ OTP  ○ LVP        │
 ╰──────────────────────────────────────────╯
  Set 15.00 V (+10.00 V)?   y  yes   Esc  no
- Space  output   ←→  digit   ?  help
+ Space  output   q  quit   ?  help

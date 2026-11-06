@@ -13,4 +13,4 @@
 │ ○ OVP  ○ OCP  ○ OPP  ● OTP  ○ LVP        │
 ╰──────────────────────────────────────────╯
  OTP tripped · output off ·  Space  clear
- Space  output   ←→  digit   ?  help
+ Space  output   q  quit   ?  help

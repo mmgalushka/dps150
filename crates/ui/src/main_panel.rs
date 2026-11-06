@@ -225,6 +225,7 @@ const KEYS: [(&str, &str); 9] = [
     (",", "settings"),
     ("m", "recall"),
 ];
+const QUIT: (&str, &str) = ("q", "quit");
 const TAIL: (&str, &str) = ("?", "help");
 
 fn item_width(key: &str, label: &str) -> usize {
@@ -254,7 +255,7 @@ pub(crate) fn fit_items<'a>(
 }
 
 fn key_bar_items(layout_width: usize) -> Vec<(&'static str, &'static str)> {
-    fit_items(layout_width, &KEYS, &[TAIL])
+    fit_items(layout_width, &KEYS, &[QUIT, TAIL])
 }
 
 /// While typed entry is open the bar is replaced; there is no `? help`
@@ -885,12 +886,12 @@ mod tests {
     #[test]
     fn ui_08_the_key_bar_reproduces_the_documented_items_at_each_width() {
         let keys = |layout| widths(layout).iter().map(|(k, _)| *k).collect::<Vec<_>>();
-        assert_eq!(keys(44), ["Space", "←→", "?"]);
-        assert_eq!(keys(80), ["Space", "←→", "↑↓", "⏎", "Tab", "?"]);
-        assert_eq!(keys(100), ["Space", "←→", "↑↓", "⏎", "Tab", "p", "o", "?"]);
+        assert_eq!(keys(44), ["Space", "q", "?"]);
+        assert_eq!(keys(80), ["Space", "←→", "↑↓", "⏎", "q", "?"]);
+        assert_eq!(keys(100), ["Space", "←→", "↑↓", "⏎", "Tab", "p", "q", "?"]);
         assert_eq!(
             keys(120),
-            ["Space", "←→", "↑↓", "⏎", "Tab", "p", "o", ",", "?"]
+            ["Space", "←→", "↑↓", "⏎", "Tab", "p", "o", "q", "?"]
         );
     }
 

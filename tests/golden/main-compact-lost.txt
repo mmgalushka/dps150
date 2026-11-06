@@ -13,4 +13,4 @@
 │ ? OVP  ? OCP  ? OPP  ? OTP  ? LVP        │
 ╰──────────────────────────────────────────╯
  Output unknown · retrying 1 s
- Space  output   ←→  digit   ?  help
+ Space  output   q  quit   ?  help

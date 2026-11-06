@@ -13,4 +13,4 @@
 │ ○ OVP  ○ OCP  ○ OPP  ○ OTP  ○ LVP        │
 ╰──────────────────────────────────────────╯
  ON at 5.00 V / 1.500 A?   y  yes   Esc  no
- Space  output   ←→  digit   ?  help
+ Space  output   q  quit   ?  help

@@ -13,4 +13,4 @@
 │ ○ OVP  ○ OCP  ○ OPP  ○ OTP  ○ LVP        │
 ╰──────────────────────────────────────────╯
  Vin 20.25 V · 24.3 °C · 0.060 Wh
- Space  output   ←→  digit   ?  help
+ Space  output   q  quit   ?  help
