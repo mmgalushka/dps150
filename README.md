@@ -1,4 +1,4 @@
-<h1 align="center">dps150</h1>
+<h1 align="center">Terminal interface for FNIRSI DPS-150</h1>
 
 <p align="center">
   A terminal interface for the <b>FNIRSI DPS-150</b> bench power supply.<br>
