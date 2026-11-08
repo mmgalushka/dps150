@@ -4,6 +4,8 @@ All notable changes are listed here, newest first. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-08
+
 ### Added
 - Terminal interface for the FNIRSI DPS-150: main panel with digit-cursor editing, six presets (M1–M6, names kept by the app), protection settings, settings screen, help overlay.
 - Output safety rules: confirmations, limit checks, link-loss handling, quit sequence (`spec/SAFETY.md`).
