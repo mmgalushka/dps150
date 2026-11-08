@@ -132,6 +132,63 @@ The root `Cargo.toml` is also the `dps150` package, so without `--workspace` (`-
 - `attach-debs.yml` (same tag trigger) builds the `.deb` packages with cargo-deb on Ubuntu 22.04 amd64 and arm64, waits for the Release to exist and attaches them. cargo-dist does not produce `.deb` files, and its `post-announce-jobs` writes a broken `uses:` line in 0.34. The post-install note comes from `packaging/postinst`.
 - Build-provenance attestations are generated for the artifacts.
 
+### 5.1 Releasing a new version
+A release is made by pushing a tag. Nothing is released by a push to `main`, and the version is not computed: it lives in one place, `version` under `[workspace.package]` in `Cargo.toml`, and you change it in the release PR. Replace `X.Y.Z` below with the new version. Follow [Semantic Versioning](https://semver.org/): patch for fixes, minor for new features, major for changes that break config files, key bindings or flags.
+
+**1. Check the starting point**
+- Everything to be released is merged, and CI on `main` is green.
+- `git checkout main && git pull`, and `git status` is clean.
+- Optional: `./helper.sh dist-plan` lists the four targets and no `dps150-sim`.
+
+**2. Make the release PR**
+```
+git checkout -b release/X.Y.Z
+```
+- `Cargo.toml`: set `version = "X.Y.Z"` under `[workspace.package]`. Every crate follows it.
+- `cargo build --workspace` refreshes `Cargo.lock`. `git diff --stat` must show only `Cargo.toml`, `Cargo.lock` (6 version lines, no third-party crates) and `CHANGELOG.md`.
+- `CHANGELOG.md`: under `## [Unreleased]` leave an empty section, and put the entries under a new `## [X.Y.Z] - YYYY-MM-DD`.
+- Commit, push, open the PR, wait for the checks, merge.
+- If `test (ubuntu-latest)` fails in `saf_09_a_prompt_is_cancelled_when_the_terminal_becomes_too_small`, it is a known flaky test: use **Re-run failed jobs** on the run page (the sandbox token cannot).
+
+**3. Tag**
+Wait for CI on `main` to finish green, then:
+```
+git checkout main && git pull
+git log --oneline -2          # the top commit is the merge of the release PR
+grep -n '^version' Cargo.toml # version = "X.Y.Z"
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin vX.Y.Z        # only the tag, not --tags
+```
+The tag must be `v` plus exactly the Cargo version.
+
+**4. Watch the Actions tab**
+Two workflows start within seconds and take 5 to 10 minutes.
+- **Release**: `plan`, four `build-local-artifacts`, `build-global-artifacts`, `host`, `publish-homebrew-formula`, `announce`.
+- **Attach .deb packages**: one job per architecture.
+All jobs must be green, and `publish-homebrew-formula` must run, not skip.
+
+**5. Verify**
+- The GitHub Release is public (not a draft) with 16 assets, including both `.deb` files.
+- `mmgalushka/homebrew-tap` has a new commit `dps150 X.Y.Z` that changes `Formula/dps150.rb`.
+- On a clean Mac: `brew install mmgalushka/tap/dps150` (or `brew upgrade`), then `dps150 --version`.
+- On Debian or Ubuntu: `sudo apt install ./dps150_X.Y.Z-1_<arch>.deb`, then `dps150 --version`.
+- Optional: `gh attestation verify <file> --repo mmgalushka/dps150`.
+
+**Dry run with a pre-release**
+For a change to the release machinery itself (workflows, `dist-workspace.toml`, packaging), release `X.Y.Z-rc.1` first: set that version in the PR and tag `vX.Y.Z-rc.1`. The Release and the `.deb` jobs run in full and the GitHub Release is marked pre-release, but **the Homebrew job is skipped**, so the tap is first exercised by the real release. Do not install the cargo-dist `dps150-installer.sh` for a test; unpack an archive in a scratch directory instead.
+
+**If a release fails**
+| Symptom | Cause and fix |
+|---|---|
+| Builds fail with `profile 'dist' is not defined` | `[profile.dist]` is missing from `Cargo.toml` (it inherits `release`). It is there since 1.0.0. |
+| `.deb` job fails at the attestation step with `missing "id-token" permission` | `attach-debs.yml` needs `id-token: write` and `attestations: write`. If one architecture fails, the other is cancelled. |
+| `publish-homebrew-formula` fails with an authentication error | `HOMEBREW_TAP_TOKEN` is missing or expired (see below). |
+| A workflow fix is needed after the tag was pushed | A tag runs the workflow files as they were at the tagged commit, so re-running does not pick up the fix. Merge the fix, delete the release and the tag, then tag again: `gh release delete vX.Y.Z --cleanup-tag` and `git tag -d vX.Y.Z`. Delete the release first, or the new run collides with its assets. Only do this for a version nobody has installed; otherwise release the next patch version. |
+
+**Standing maintenance**
+- `HOMEBREW_TAP_TOKEN` is a fine-grained token with *Contents: Read and write* on `mmgalushka/homebrew-tap` only, stored as an Actions secret in this repository. It expires. When it does, the Homebrew job fails at the next release: create a new token with the same settings and replace the secret. Write the expiry date in the token's description.
+- One tap serves every app: another project adds `tap = "mmgalushka/homebrew-tap"` to its own `dist-workspace.toml` and its own `HOMEBREW_TAP_TOKEN` secret. Do not edit the generated formulae by hand; the next release overwrites them.
+
 ## 6. Targets
 | Target | Notes |
 |---|---|
