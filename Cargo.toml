@@ -54,3 +54,8 @@ assets = [
     ["target/release/dps150", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/dps150/README", "644"],
 ]
+
+# Profile used by cargo-dist for release builds (DEVOPS.md §5).
+[profile.dist]
+inherits = "release"
+lto = "thin"
