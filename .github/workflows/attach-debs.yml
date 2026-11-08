@@ -10,6 +10,9 @@ on:
 
 permissions:
   contents: write
+  # Build-provenance attestation of the .deb files.
+  id-token: write
+  attestations: write
 
 jobs:
   deb:
