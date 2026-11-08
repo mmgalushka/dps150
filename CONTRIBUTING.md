@@ -66,6 +66,10 @@ Tests are in levels (`L1`, `L2`, `L3` in the register): unit tests per crate, in
 - **Output safety is the one thing we are strict about.** Anything touching what turns the output on, what it is set to, or what happens on a lost link needs a rule in `spec/SAFETY.md` and a test.
 - AI-assisted code is welcome (this project is largely written with Claude). The same rules apply: you are responsible for what you submit, and the spec and tests decide whether it is right.
 
+## Releases
+
+Maintainers: the step-by-step release checklist is in [DEVOPS.md](DEVOPS.md) §5.1. A release is made by pushing a `v*` tag; pushing to `main` does not release anything.
+
 ## Git ignore policy: ignore everything except...
 
 `.gitignore` uses an **allowlist**. The first rule is `*`, which ignores every
